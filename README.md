@@ -33,7 +33,13 @@ O projeto foi desenvolvido utilizando as seguintes tecnologias e bibliotecas:
 
 ## 📂 **Estrutura do Projeto**
 
-MedIATCC/ ├── .streamlit/ │ └── secrets.toml # Arquivo de configuração da API ├── app.py # Código principal da aplicação ├── requirements.txt # Dependências do projeto └── README.md # Documentação do projeto
+MedIATCC/
+├── .streamlit/
+│   └── secrets.toml        # Arquivo de configuração da API
+├── app.py                  # Código principal da aplicação
+├── requirements.txt        # Dependências do projeto
+└── README.md               # Documentação do projeto
+
 
 
 
@@ -51,33 +57,35 @@ Chave de acesso à Groq API.
 Passos para Executar
 Clone este repositório:
 
-```bash
-
+```
+bash
 git clone https://github.com/SEU-USUARIO/MedIATCC.git
 cd MedIATCC
-Instale as dependências:
+```
+-**Instale as dependências**:
 
-bash
-
+```
 pip install -r requirements.txt
+```
 Configure a chave da API no arquivo .streamlit/secrets.toml:
 
-bash
-
+```
 mkdir -p .streamlit
 echo "GROQ_API_KEY = 'SUA_CHAVE_AQUI'" > .streamlit/secrets.toml
+```
 Execute o aplicativo:
 
-bash
-
+```
 streamlit run app.py
 Acesse a aplicação no navegador pelo link fornecido (geralmente http://localhost:8501).
+```
 
-💻 Autores
+##💻** Autores**
 Este projeto foi desenvolvido por:
 
 Ryan Tereciani
 Reuel Amador Mantovani
-📜 Licença
+
+##📜 **Licença**
 Este projeto é apenas para fins acadêmicos e não deve ser utilizado como substituto de consultas médicas.
 
