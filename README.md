@@ -1,6 +1,6 @@
 # MedIA
 
-**MedIATCC** é um projeto desenvolvido como Trabalho de Conclusão de Curso (TCC) por **Ryan Tereciani** e **Reuel Amador Mantovani**.  
+**MedIA** é um projeto desenvolvido como Trabalho de Conclusão de Curso (TCC) por **Ryan Tereciani** e **Reuel Amador Mantovani**.  
 Trata-se de um sistema de inteligência artificial voltado para auxiliar usuários na análise de sintomas médicos e oferecer direcionamentos iniciais para cuidados e exames.
 
 ---
