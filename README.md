@@ -83,7 +83,7 @@ Acesse a aplicação no navegador pelo link fornecido (geralmente http://localho
 ## 💻 **Autores**
 Este projeto foi desenvolvido por:
 
-Ryan Tereciani
+Ryan Tereciani &
 Reuel Amador Mantovani
 
 ## 📜 **Licença**
