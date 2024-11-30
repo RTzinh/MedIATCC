@@ -51,7 +51,7 @@ MedIATCC/
 
 - **Python 3.12** instalado.
 - Pip atualizado:
-  ```
+  ```bash
   pip install --upgrade pip
 Chave de acesso à Groq API.
 Passos para Executar
