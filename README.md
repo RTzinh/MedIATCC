@@ -1,2 +1,2 @@
 # MedIATCC
-TCC
+TCC Feito por Ryan Tereciani e Reuel Amador Mantovani
