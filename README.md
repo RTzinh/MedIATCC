@@ -1,4 +1,4 @@
-# MedIATCC
+# MedIA
 
 **MedIATCC** é um projeto desenvolvido como Trabalho de Conclusão de Curso (TCC) por **Ryan Tereciani** e **Reuel Amador Mantovani**.  
 Trata-se de um sistema de inteligência artificial voltado para auxiliar usuários na análise de sintomas médicos e oferecer direcionamentos iniciais para cuidados e exames.
@@ -7,7 +7,7 @@ Trata-se de um sistema de inteligência artificial voltado para auxiliar usuári
 
 ## 🩺 **Sobre o Projeto**
 
-O **MedIATCC** utiliza um modelo de inteligência artificial baseado na integração com a API Groq e a biblioteca LangChain para oferecer um sistema interativo e inteligente que:
+O **MedIA** utiliza um modelo de inteligência artificial baseado na integração com a API Groq e a biblioteca LangChain para oferecer um sistema interativo e inteligente que:
 
 - Faz perguntas relevantes para entender os sintomas do usuário.
 - Oferece sugestões de possíveis diagnósticos preliminares.
