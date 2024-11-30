@@ -80,12 +80,12 @@ streamlit run app.py
 Acesse a aplicação no navegador pelo link fornecido (geralmente http://localhost:8501).
 ```
 
-##💻** Autores**
+## 💻 **Autores**
 Este projeto foi desenvolvido por:
 
 Ryan Tereciani
 Reuel Amador Mantovani
 
-##📜 **Licença**
+## 📜 **Licença**
 Este projeto é apenas para fins acadêmicos e não deve ser utilizado como substituto de consultas médicas.
 
