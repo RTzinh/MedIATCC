@@ -35,8 +35,7 @@ O projeto foi desenvolvido utilizando as seguintes tecnologias e bibliotecas:
 
 MedIATCC/ ├── .streamlit/ │ └── secrets.toml # Arquivo de configuração da API ├── app.py # Código principal da aplicação ├── requirements.txt # Dependências do projeto └── README.md # Documentação do projeto
 
-yaml
-Copiar código
+
 
 ---
 
@@ -52,7 +51,7 @@ Chave de acesso à Groq API.
 Passos para Executar
 Clone este repositório:
 
-bash
+```bash
 
 git clone https://github.com/SEU-USUARIO/MedIATCC.git
 cd MedIATCC
