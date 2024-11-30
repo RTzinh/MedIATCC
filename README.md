@@ -51,14 +51,14 @@ MedIATCC/
 
 - **Python 3.12** instalado.
 - Pip atualizado:
-  ```bash
+  ```
   pip install --upgrade pip
 Chave de acesso à Groq API.
 Passos para Executar
 Clone este repositório:
 
 ```
-bash
+
 git clone https://github.com/SEU-USUARIO/MedIATCC.git
 cd MedIATCC
 ```
