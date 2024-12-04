@@ -3,7 +3,7 @@ import streamlit as st  # Biblioteca para criar interfaces de aplicativos web.
 
 st.set_page_config(
     page_title="MedIA",  # Nome exibido na aba do navegador.
-    page_icon="🤖",      # Ícone exibido ao lado do título da página.
+    page_icon="aaaaaaaaaaaaaaa.png",    # Ícone exibido ao lado do título da página.
     layout="centered",       # Layout da página (pode ser 'centered' ou 'wide').
 )
 
