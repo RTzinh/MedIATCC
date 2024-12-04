@@ -68,7 +68,6 @@ particles_html = """
     });
 </script>
 """
-
 # Importações do LangChain, usadas para criar cadeias de processamento de linguagem natural.
 from langchain.chains import LLMChain
 from langchain.prompts import (
