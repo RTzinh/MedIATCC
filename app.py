@@ -1,6 +1,12 @@
 import os  # Biblioteca para manipulação do sistema operacional (não usada neste código).
 import streamlit as st  # Biblioteca para criar interfaces de aplicativos web.
 
+st.set_page_config(
+    page_title="MedIA",  # Nome exibido na aba do navegador.
+    page_icon="🤖",      # Ícone exibido ao lado do título da página.
+    layout="wide",       # Layout da página (pode ser 'centered' ou 'wide').
+)
+
 # Importações do LangChain, usadas para criar cadeias de processamento de linguagem natural.
 from langchain.chains import LLMChain
 from langchain.prompts import (
@@ -13,11 +19,7 @@ from langchain.chains.conversation.memory import ConversationBufferWindowMemory 
 from langchain_groq import ChatGroq  # Integração com o modelo LLM Groq.
 
 
-st.set_page_config(
-    page_title="MedIA",  # Nome exibido na aba do navegador.
-    page_icon="🤖",      # Ícone exibido ao lado do título da página.
-    layout="centered",       # Layout da página (pode ser 'centered' ou 'wide').
-)
+
 # Função principal do aplicativo.
 def main():
     """
