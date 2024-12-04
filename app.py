@@ -6,16 +6,6 @@ st.set_page_config(
     page_icon="aaaaaaaaaaaaaaa.png",    # Ícone exibido ao lado do título da página.
     layout="centered",       # Layout da página (pode ser 'centered' ou 'wide').
 )
-st.markdown(
-    """
-    <div style="display: flex; align-items: center; justify-content: space-between;">
-        <h1 style="margin: 0;">MedIA</h1>
-        <img src="aaaaaaaaaaaaaaa.png" alt="Logo" style="height: 50px;">
-    </div>
-    <hr style="border: 1px solid #ccc;">
-    """,
-    unsafe_allow_html=True
-)
 
 # Importações do LangChain, usadas para criar cadeias de processamento de linguagem natural.
 from langchain.chains import LLMChain
