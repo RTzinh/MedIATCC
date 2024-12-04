@@ -12,6 +12,12 @@ from langchain.schema import SystemMessage  # Representa mensagens de sistema em
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory  # Gerencia o histórico de conversas.
 from langchain_groq import ChatGroq  # Integração com o modelo LLM Groq.
 
+
+st.set_page_config(
+    page_title="MedIA",  # Nome exibido na aba do navegador.
+    page_icon="🤖",      # Ícone exibido ao lado do título da página.
+    layout="centered",       # Layout da página (pode ser 'centered' ou 'wide').
+)
 # Função principal do aplicativo.
 def main():
     """
