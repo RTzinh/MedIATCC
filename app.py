@@ -7,22 +7,19 @@ st.set_page_config(
     layout="centered",       # Layout da página (pode ser 'centered' ou 'wide').
 )
 
-# HTML e JavaScript para o sistema de partículas
+# HTML para partículas interativas
 particles_html = """
 <div id="particles-js" style="position: fixed; width: 100%; height: 100%; z-index: -1;"></div>
 <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
 <script>
     particlesJS("particles-js", {
         "particles": {
-            "number": {
-                "value": 100,
-                "density": { "enable": true, "value_area": 800 }
-            },
+            "number": { "value": 80, "density": { "enable": true, "value_area": 800 } },
             "color": { "value": "#ffffff" },
             "shape": {
                 "type": "circle",
                 "stroke": { "width": 0, "color": "#000000" },
-                "polygon": { "nb_sides": 5 },
+                "polygon": { "nb_sides": 5 }
             },
             "opacity": {
                 "value": 0.5,
@@ -30,7 +27,7 @@ particles_html = """
                 "anim": { "enable": false, "speed": 1, "opacity_min": 0.1, "sync": false }
             },
             "size": {
-                "value": 5,
+                "value": 3,
                 "random": true,
                 "anim": { "enable": false, "speed": 40, "size_min": 0.1, "sync": false }
             },
@@ -43,7 +40,7 @@ particles_html = """
             },
             "move": {
                 "enable": true,
-                "speed": 6,
+                "speed": 2,
                 "direction": "none",
                 "random": false,
                 "straight": false,
