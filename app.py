@@ -3,6 +3,7 @@ import io
 import json
 import os
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -74,6 +75,63 @@ MEDICATION_DATABASE = {
     },
 }
 
+STOPWORDS = {
+    "com", "pra", "para", "nos", "das", "dos", "uma", "num", "que", "qual", "pelo", "pela",
+    "das", "dos", "das", "e", "de", "do", "da", "um", "uma", "em", "no", "na", "os", "as",
+    "por", "sem", "ser", "ter", "vai", "vou", "tem", "dor", "estou", "mais", "menos",
+}
+
+EDUCATION_LIBRARY = {
+    "hipertensao": [
+        {
+            "title": "Guia pratico de controle da pressao arterial",
+            "type": "video",
+            "url": "https://www.youtube.com/watch?v=93dnup_pressao",
+        },
+        {
+            "title": "Infografico: reducao de sodio na dieta",
+            "type": "infografico",
+            "url": "https://www.saude.gov/infografico-sodio.pdf",
+        },
+    ],
+    "diabetes": [
+        {
+            "title": "Video educativo sobre autocuidado em diabetes tipo 2",
+            "type": "video",
+            "url": "https://www.youtube.com/watch?v=84edu_diabetes",
+        },
+        {
+            "title": "Checklist de monitoramento glicemico domiciliar",
+            "type": "folheto",
+            "url": "https://www.consultorio.ai/assets/folheto-monitoramento.pdf",
+        },
+    ],
+    "saude mental": [
+        {
+            "title": "Tecnicas de respiracao para ansiedade",
+            "type": "audio",
+            "url": "https://www.saude.gov/respiracao-guiada.mp3",
+        },
+        {
+            "title": "Cartilha de sinais de alerta em depressao",
+            "type": "folheto",
+            "url": "https://www.saude.gov/cartilha-depressao.pdf",
+        },
+    ],
+    "puerperio": [
+        {
+            "title": "Cuidados pos-parto imediato",
+            "type": "video",
+            "url": "https://www.youtube.com/watch?v=84puerperio",
+        },
+        {
+            "title": "Infografico: amamentacao segura",
+            "type": "infografico",
+            "url": "https://www.saude.gov/infografico-amamentacao.pdf",
+        },
+    ],
+}
+
 
 def ensure_session_defaults() -> None:
     defaults = {
@@ -92,6 +150,13 @@ def ensure_session_defaults() -> None:
         "consultation_log": [],
         "pending_voice_input": "",
         "audio_responses": [],
+        "education_recommendations": [],
+        "epidemiology_snapshot": {},
+        "active_learning_queue": [],
+        "planner_state": {},
+        "multimodal_signature": {},
+        "confidence_history": [],
+        "explainability_notes": [],
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -108,6 +173,20 @@ def ensure_session_defaults() -> None:
         st.session_state.emergency_router = EmergencyRouter()
     if "history_manager" not in st.session_state:
         st.session_state.history_manager = HistoryManager()
+    if "education_manager" not in st.session_state:
+        st.session_state.education_manager = EducationResourceManager(EDUCATION_LIBRARY)
+    if "epidemiology_monitor" not in st.session_state:
+        st.session_state.epidemiology_monitor = EpidemiologyMonitor()
+    if "active_learning_tracker" not in st.session_state:
+        st.session_state.active_learning_tracker = ActiveLearningTracker()
+    if "fusion_engine" not in st.session_state:
+        st.session_state.fusion_engine = MultimodalFusionEngine()
+    if "confidence_calibrator" not in st.session_state:
+        st.session_state.confidence_calibrator = ConfidenceCalibrator()
+    if "conversation_planner" not in st.session_state:
+        st.session_state.conversation_planner = ConversationPlanner()
+    if "explainability_engine" not in st.session_state:
+        st.session_state.explainability_engine = ExplainabilityEngine()
 
 
 class ExamPipeline:
@@ -347,6 +426,163 @@ class HistoryManager:
         return clean.replace("&nbsp;", " ").strip()
 
 
+class EducationResourceManager:
+    def __init__(self, library: Dict[str, List[Dict[str, str]]]) -> None:
+        self.library = library
+
+    def recommend_from_text(self, text: str, limit: int = 6) -> List[Dict[str, str]]:
+        lowered = text.lower()
+        recommendations: List[Dict[str, str]] = []
+        already: set = set()
+        for condition, resources in self.library.items():
+            if condition in lowered:
+                for item in resources:
+                    key = (item["title"], item["url"])
+                    if key not in already:
+                        recommendations.append(item)
+                        already.add(key)
+        return recommendations[:limit]
+
+    def list_categories(self) -> List[str]:
+        return sorted(self.library.keys())
+
+
+class EpidemiologyMonitor:
+    def __init__(self) -> None:
+        self.terms = Counter()
+
+    def ingest(self, text: str) -> None:
+        tokens = re.findall(r"[a-zA-Zà-úÀ-Ú]{3,}", text.lower())
+        for token in tokens:
+            if token in STOPWORDS or len(token) < 4:
+                continue
+            self.terms[token] += 1
+
+    def export(self, limit: int = 20) -> Dict[str, int]:
+        return dict(self.terms.most_common(limit))
+
+
+class ActiveLearningTracker:
+    FAILURE_PATTERNS = (
+        "nao sei",
+        "nao tenho informacao",
+        "nao consigo responder",
+        "procure um profissional imediatamente",
+        "sem dados suficientes",
+    )
+
+    def should_flag(self, user_text: str, bot_text: str) -> Optional[Dict[str, str]]:
+        for pattern in self.FAILURE_PATTERNS:
+            if pattern in bot_text.lower():
+                return {
+                    "user": user_text,
+                    "bot": bot_text[:500],
+                    "reason": f"Resposta com baixa cobertura: '{pattern}'",
+                }
+        if user_text.strip().endswith("?") and "?" not in bot_text:
+            return {
+                "user": user_text,
+                "bot": bot_text[:500],
+                "reason": "Pergunta direta sem resposta correspondente.",
+            }
+        return None
+
+
+class MultimodalFusionEngine:
+    def fuse(
+        self,
+        user_text: str,
+        exam_findings: List[Dict[str, Any]],
+        imaging_findings: List[Dict[str, Any]],
+        wearable_payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        payload = {
+            "user_text": user_text,
+            "exam_count": len(exam_findings),
+            "imaging_count": len(imaging_findings),
+            "wearable_payload": wearable_payload,
+        }
+        blob = json.dumps(payload, sort_keys=True)
+        digest = hashlib.sha256(blob.encode("utf-8")).hexdigest()
+        vector = [
+            round(int(digest[idx : idx + 2], 16) / 255, 4) for idx in range(0, 10, 2)
+        ]
+        summary = (
+            f"Fusao multimodal: {len(exam_findings)} exames, "
+            f"{len(imaging_findings)} imagens, dados wearable={'sim' if wearable_payload else 'nao'}."
+        )
+        return {"signature": digest[:16], "vector": vector, "summary": summary}
+
+
+class ConfidenceCalibrator:
+    def score(self, response: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        score = 0.45
+        explanation: List[str] = ["Base inicial de 0.45."]
+        if context.get("exam_findings"):
+            score += 0.15
+            explanation.append("Dados de exames estruturados fornecidos (+0.15).")
+        if context.get("imaging_findings"):
+            score += 0.15
+            explanation.append("Achados radiologicos presentes (+0.15).")
+        if context.get("medication_alerts"):
+            score += 0.05
+            explanation.append("Consideracao de interacoes medicamentosas (+0.05).")
+        if "Aviso" in response or "orientar" in response.lower():
+            score -= 0.05
+            explanation.append("Resposta destaca limitacoes (+/-).")
+        score = min(max(score, 0.1), 0.95)
+        confidence_label = "alta" if score >= 0.75 else "moderada" if score >= 0.55 else "baixa"
+        explanation.append(f"Nivel de confianca: {confidence_label}.")
+        return {
+            "score": round(score, 2),
+            "label": confidence_label,
+            "rationale": " ".join(explanation),
+        }
+
+
+class ConversationPlanner:
+    def plan(
+        self,
+        user_text: str,
+        state: Dict[str, Any],
+    ) -> Dict[str, str]:
+        lowered = user_text.lower()
+        stage = "triagem"
+        next_action = "Coletar sintomas adicionais."
+        if any(term in lowered for term in ["resultado", "exame", "laudo"]):
+            stage = "analise-exames"
+            next_action = "Cruzar sintomas com exames enviados."
+        if state.get("imaging_findings"):
+            stage = "integracao-imagem"
+            next_action = "Conectar achados de imagem com relato clinico."
+        if any(term in lowered for term in ["dor intensa", "emergencia", "urgente"]):
+            stage = "emergencia"
+            next_action = "Priorizar orientacao de socorro imediato."
+        if "imc" in lowered:
+            next_action = "Executar calculo de IMC e aguardar nova instrucao."
+        plan_prompt = (
+            f"Plano atual: {stage}. Proxima acao: {next_action}. "
+            "Caso ja tenha as 10 perguntas respondidas, sintetizar diagnosticos diferenciais."
+        )
+        return {"stage": stage, "next_action": next_action, "plan_prompt": plan_prompt}
+
+
+class ExplainabilityEngine:
+    def generate(self, finding: Dict[str, Any]) -> str:
+        payload = finding.get("payload", {})
+        probs = payload.get("probabilities") or {}
+        if not probs:
+            return (
+                f"Nenhuma probabilidade detalhada informada para {finding.get('name')}."
+            )
+        ranked = sorted(probs.items(), key=lambda item: item[1], reverse=True)
+        top = ", ".join(f"{label}: {value:.2f}" for label, value in ranked[:3])
+        return (
+            f"Mapa de calor sugerido para {finding.get('name')}: principais hipoteses {top}. "
+            "Solicitar grad-CAM ao microservico para suporte visual definitivo."
+        )
+
+
 def build_context_sections() -> (str, Dict[str, Any]):
     exam_context = st.session_state.exam_pipeline.render_for_prompt(st.session_state.exam_findings)
     imaging_context = st.session_state.radiography_service.render_for_prompt(
@@ -366,12 +602,24 @@ def build_context_sections() -> (str, Dict[str, Any]):
         pieces.append(wearable_context)
     if medication_alerts:
         pieces.append("Alertas farmacologicos ativos: " + "; ".join(sorted(set(medication_alerts))))
+    plan_state = st.session_state.planner_state or {}
+    if plan_state.get("plan_prompt"):
+        pieces.append("Plano conversacional:\n" + plan_state["plan_prompt"])
+    fusion_data = st.session_state.multimodal_signature or {}
+    if fusion_data.get("summary"):
+        pieces.append(
+            "Assinatura multimodal: "
+            + fusion_data["summary"]
+            + f" Vetor={fusion_data.get('vector')}"
+        )
     context_payload = "\n\n".join(pieces)
     context_meta = {
         "critical_flags": st.session_state.critical_events,
         "medication_alerts": medication_alerts,
         "exam_findings": st.session_state.exam_findings,
         "imaging_findings": st.session_state.imaging_findings,
+        "planner_state": plan_state,
+        "multimodal_signature": fusion_data,
     }
     return context_payload, context_meta
 
@@ -427,6 +675,8 @@ def render_sidebar() -> None:
                 if result and result["id"] not in st.session_state.imaging_ids:
                     st.session_state.imaging_findings.append(result)
                     st.session_state.imaging_ids.add(result["id"])
+                    explain_note = st.session_state.explainability_engine.generate(result)
+                    st.session_state.explainability_notes.append(explain_note)
 
         if st.session_state.imaging_findings:
             with st.expander("Achados de radiografia", expanded=False):
@@ -435,6 +685,62 @@ def render_sidebar() -> None:
                     st.json(item["payload"])
                     if item["notes"]:
                         st.caption("; ".join(item["notes"]))
+
+        if st.session_state.explainability_notes:
+            with st.expander("Explicabilidade visual", expanded=False):
+                for note in st.session_state.explainability_notes[-5:]:
+                    st.write("- " + note)
+
+        st.markdown("---")
+        st.subheader("Educacao personalizada")
+        if st.session_state.education_recommendations:
+            for rec in st.session_state.education_recommendations[:5]:
+                st.markdown(
+                    f"- **{rec['title']}** ({rec['type']}) — [Acessar]({rec['url']})"
+                )
+        else:
+            st.caption("Recomende exames ou descreva sintomas para obter materiais.")
+        selected_category = st.selectbox(
+            "Explorar categoria manualmente",
+            options=["Selecione"] + st.session_state.education_manager.list_categories(),
+            index=0,
+        )
+        if selected_category != "Selecione":
+            for rec in EDUCATION_LIBRARY[selected_category]:
+                st.markdown(
+                    f"* `{selected_category}` -> **{rec['title']}** ({rec['type']})"
+                )
+
+        st.markdown("---")
+        st.subheader("Monitoramento epidemiologico")
+        if st.session_state.epidemiology_snapshot:
+            st.json(st.session_state.epidemiology_snapshot)
+        else:
+            st.caption("Ainda sem dados agregados suficientes.")
+
+        st.markdown("---")
+        if st.session_state.active_learning_queue:
+            with st.expander("Fila de aprendizado ativo", expanded=False):
+                for idx, item in enumerate(st.session_state.active_learning_queue[-5:], 1):
+                    st.markdown(f"**Caso {idx}**")
+                    st.caption(item["reason"])
+                    st.text(f"Pergunta: {item['user']}")
+                    st.text(f"Resposta: {item['bot']}")
+
+        if st.session_state.confidence_history:
+            last_conf = st.session_state.confidence_history[-1]
+            st.metric(
+                "Confianca da ultima resposta",
+                f"{last_conf['label']} ({last_conf['score']})",
+            )
+
+        if st.session_state.planner_state:
+            st.caption(
+                "Plano atual: "
+                + st.session_state.planner_state.get("stage", "")
+                + " -> "
+                + st.session_state.planner_state.get("next_action", "")
+            )
 
         st.markdown("---")
         wearable_input = st.text_area(
@@ -556,6 +862,9 @@ def main() -> None:
             f"<div class='message user-message'><strong>Voce:</strong> {user_input}</div>"
         )
 
+        st.session_state.epidemiology_monitor.ingest(user_input)
+        st.session_state.epidemiology_snapshot = st.session_state.epidemiology_monitor.export()
+
         emergency_message = st.session_state.emergency_router.detect(user_input)
         if emergency_message:
             st.session_state.history.append(
@@ -573,13 +882,56 @@ def main() -> None:
                 + "</div>"
             )
 
+        planner_state = st.session_state.conversation_planner.plan(
+            user_text=user_input,
+            state={
+                "exam_findings": st.session_state.exam_findings,
+                "imaging_findings": st.session_state.imaging_findings,
+                "wearable_payload": st.session_state.wearable_payload,
+            },
+        )
+        st.session_state.planner_state = planner_state
+
+        fusion_data = st.session_state.fusion_engine.fuse(
+            user_text=user_input,
+            exam_findings=st.session_state.exam_findings,
+            imaging_findings=st.session_state.imaging_findings,
+            wearable_payload=st.session_state.wearable_payload,
+        )
+        st.session_state.multimodal_signature = fusion_data
+
         context_payload, context_meta = build_context_sections()
         composed_input = user_input
         if context_payload:
             composed_input = f"{context_payload}\n\nEntrada do paciente: {user_input}"
 
         response = conversation.predict(human_input=composed_input)
-        final_response = st.session_state.validator.attach_disclaimer(response, context_meta)
+        enriched_response = st.session_state.validator.attach_disclaimer(response, context_meta)
+        confidence_result = st.session_state.confidence_calibrator.score(enriched_response, context_meta)
+        st.session_state.confidence_history.append(confidence_result)
+        final_response = (
+            f"{enriched_response}\n\nConfianca estimada: {confidence_result['label']} "
+            f"({confidence_result['score']})."
+        )
+
+        education_hits = st.session_state.education_manager.recommend_from_text(
+            text=f"{user_input}\n{final_response}"
+        )
+        if education_hits:
+            merged = st.session_state.education_recommendations + education_hits
+            seen: set = set()
+            deduped = []
+            for item in merged:
+                key = (item["title"], item["url"])
+                if key not in seen:
+                    deduped.append(item)
+                    seen.add(key)
+            st.session_state.education_recommendations = deduped
+
+        flagged = st.session_state.active_learning_tracker.should_flag(user_input, final_response)
+        if flagged:
+            st.session_state.active_learning_queue.append(flagged)
+
         st.session_state.history.append(
             f"<div class='message ai-message'><strong>MedIA:</strong> {final_response}</div>"
         )
@@ -610,3 +962,8 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
