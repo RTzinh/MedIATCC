@@ -1513,11 +1513,17 @@ def main() -> None:
                     seen.add(key)
             st.session_state.education_recommendations = deduped
 
-        flagged = st.session_state.active_learning_tracker.should_flag(
-            user_input,
-            final_response,
-            metadata=model_error_context,
-        )
+        try:
+            flagged = st.session_state.active_learning_tracker.should_flag(
+                user_input,
+                final_response,
+                metadata=model_error_context,
+            )
+        except TypeError:
+            flagged = st.session_state.active_learning_tracker.should_flag(
+                user_input,
+                final_response,
+            )
         if flagged:
             st.session_state.active_learning_queue.append(flagged)
 
