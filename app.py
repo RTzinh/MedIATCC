@@ -802,16 +802,19 @@ def apply_theme_settings() -> None:
     st.markdown(css, unsafe_allow_html=True)
 
 
-def render_stepper() -> None:
+def render_progress_overview(show_details: bool = False, render_bar: bool = True) -> None:
     data = st.session_state.question_progress
     total = data.get("total", 10)
     answered = data.get("answered", 0)
     current = data.get("current", answered + 1)
-    st.markdown(
-        f"### {ICON_STEP} Progresso da triagem ({answered}/{total})",
-        unsafe_allow_html=True,
-    )
-    st.progress(min(answered / total if total else 0, 1.0))
+    if render_bar:
+        st.markdown(
+            f"#### {ICON_STEP} Progresso da triagem ({answered}/{total})",
+            unsafe_allow_html=True,
+        )
+        st.progress(min(answered / total if total else 0, 1.0))
+    if not show_details:
+        return
     cols = st.columns(5)
     history = data.get("history", [])
     for idx in range(total):
@@ -1298,22 +1301,6 @@ def main() -> None:
         "Sempre consulte um profissional de saude para confirmacao."
     )
 
-    with st.container():
-        st.markdown("<div class='themed-panel'>", unsafe_allow_html=True)
-        render_stepper()
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with st.container():
-        st.markdown("<div class='themed-panel'>", unsafe_allow_html=True)
-        render_patient_dashboard()
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with st.container():
-        st.markdown("<div class='themed-panel'>", unsafe_allow_html=True)
-        render_wearable_insights()
-        render_explainability_panel()
-        st.markdown("</div>", unsafe_allow_html=True)
-
     system_prompt = (
         "Voce e um especialista em triagem medica digital. "
         "Siga a rotina de 10 perguntas, numerando uma a uma, e somente entregue diagnostico provavel apos obter todas. "
@@ -1341,208 +1328,228 @@ def main() -> None:
         memory=st.session_state.memory,
     )
 
-    render_history()
+    triage_tab, patient_tab, insights_tab = st.tabs(
+        ["Triagem", "Painel do paciente", "Insights"]
+    )
 
-    render_history()
+    with triage_tab:
+        st.markdown("<div class='themed-panel'>", unsafe_allow_html=True)
+        render_progress_overview(show_details=False, render_bar=True)
+        with st.expander("Ver detalhes das perguntas", expanded=False):
+            render_progress_overview(show_details=True, render_bar=False)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    user_input = st.chat_input("Digite seus sintomas", key="user_input")
-    if not user_input and st.session_state.pending_voice_input:
-        user_input = st.session_state.pending_voice_input
-        st.session_state.pending_voice_input = ""
+        render_history()
 
-    if user_input:
-        st.session_state.history.append(
-            f"<div class='message user-message'><strong>Voce:</strong> {user_input}</div>"
-        )
-
-        if user_input.strip().lower() in {"limpar conversa", "reset", "reiniciar"}:
-            st.session_state.history = []
-            st.session_state.memory.clear()
-            st.session_state.symptom_log = []
-            st.session_state.education_recommendations = []
-            st.session_state.medication_alerts = []
-            st.session_state.active_learning_queue = []
-            st.session_state.confidence_history = []
-            st.session_state.planner_state = {}
-            st.session_state.multimodal_signature = {}
+        user_input = st.chat_input("Digite seus sintomas", key="user_input")
+        if not user_input and st.session_state.pending_voice_input:
+            user_input = st.session_state.pending_voice_input
             st.session_state.pending_voice_input = ""
-            st.session_state.audio_responses = []
-            st.session_state.question_progress = {
-                "total": 10,
-                "answered": 0,
-                "current": 1,
-                "history": [],
-            }
-            st.session_state.printable_summary = ""
-            st.session_state.education_checklist = {}
-            st.session_state.epidemiology_snapshot = {}
-            st.session_state.critical_events = []
-            st.success("Conversa e contexto reiniciados.")
-            st.rerun()
 
-        lowered_input = user_input.lower()
-        symptom_candidates = extract_symptom_candidates(user_input)
-        if symptom_candidates:
-            st.session_state.symptom_log.append(
-                {"raw": user_input, "symptoms": symptom_candidates}
-            )
-
-        if re.search(r"\bquais?\b.*\bsintoma", lowered_input):
-            summary = summarize_symptom_log(st.session_state.symptom_log)
-            response_text = (
-                summary
-                + "\n\nSempre consulte um profissional de saude para interpretacao completa."
-            )
+        if user_input:
             st.session_state.history.append(
-                f"<div class='message ai-message'><strong>MedIA:</strong> {response_text}</div>"
-            )
-            st.rerun()
-            return
-
-        st.session_state.epidemiology_monitor.ingest(user_input)
-        st.session_state.epidemiology_snapshot = st.session_state.epidemiology_monitor.export()
-
-        emergency_message = st.session_state.emergency_router.detect(user_input)
-        if emergency_message:
-            st.session_state.history.append(
-                f"<div class='message ai-message emergency'><strong>MedIA:</strong> {emergency_message}</div>"
-            )
-            st.session_state.critical_events.append(emergency_message)
-            st.rerun()
-
-        medication_alerts = st.session_state.med_checker.check(user_input)
-        if medication_alerts:
-            st.session_state.medication_alerts.extend(medication_alerts)
-            st.session_state.history.append(
-                "<div class='message ai-message alert'><strong>MedIA:</strong> "
-                + " ".join(medication_alerts)
-                + "</div>"
+                f"<div class='message user-message'><strong>Voce:</strong> {user_input}</div>"
             )
 
-        planner_state = st.session_state.conversation_planner.plan(
-            user_text=user_input,
-            state={
-                "exam_findings": st.session_state.exam_findings,
-                "imaging_findings": st.session_state.imaging_findings,
-                "wearable_payload": st.session_state.wearable_payload,
-            },
-        )
-        st.session_state.planner_state = planner_state
-
-        fusion_data = st.session_state.fusion_engine.fuse(
-            user_text=user_input,
-            exam_findings=st.session_state.exam_findings,
-            imaging_findings=st.session_state.imaging_findings,
-            wearable_payload=st.session_state.wearable_payload,
-        )
-        st.session_state.multimodal_signature = fusion_data
-
-        context_payload, context_meta = build_context_sections()
-        composed_input = user_input
-        if context_payload:
-            composed_input = f"{context_payload}\n\nEntrada do paciente: {user_input}"
-
-        try:
-            response = predict_with_fallback(conversation, composed_input)
-            model_error_context = {}
-        except BadRequestError as exc:
-            error_text = str(exc)
-            model_error_context = {}
-            if "model_decommissioned" in error_text:
-                friendly = (
-                    "MedIA: o modelo configurado foi descontinuado. "
-                    "Defina `GROQ_MODEL_NAME` para um modelo suportado como "
-                    "`llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, ou outro da lista atual da Groq "
-                    "e tente novamente."
-                )
-                st.error(
-                    "Modelo Groq configurado foi descontinuado. Atualize `GROQ_MODEL_NAME` para um modelo suportado "
-                    "(ex.: llama-3.3-70b-versatile ou llama-3.1-8b-instant)."
-                )
-                model_error_context["type"] = "model_decommissioned"
-                model_error_context["detail"] = error_text
-            else:
-                friendly = (
-                    "MedIA: nao foi possivel gerar uma resposta agora porque o pedido excedeu os limites "
-                    "do modelo. Remova alguns anexos ou reduza o texto e tente novamente."
-                )
-                st.error("Falha ao acionar o modelo Groq (BadRequest). Ajuste o contexto e tente de novo.")
-                model_error_context["type"] = "context_limit"
-                model_error_context["detail"] = error_text
-            st.session_state.history.append(
-                f"<div class='message ai-message error'><strong>MedIA:</strong> {friendly}</div>"
-            )
-            st.session_state.active_learning_queue.append(
-                {
-                    "user": user_input,
-                    "bot": friendly,
-                    "reason": f"BadRequestError: {exc}",
+            if user_input.strip().lower() in {"limpar conversa", "reset", "reiniciar"}:
+                st.session_state.history = []
+                st.session_state.memory.clear()
+                st.session_state.symptom_log = []
+                st.session_state.education_recommendations = []
+                st.session_state.medication_alerts = []
+                st.session_state.active_learning_queue = []
+                st.session_state.confidence_history = []
+                st.session_state.planner_state = {}
+                st.session_state.multimodal_signature = {}
+                st.session_state.pending_voice_input = ""
+                st.session_state.audio_responses = []
+                st.session_state.question_progress = {
+                    "total": 10,
+                    "answered": 0,
+                    "current": 1,
+                    "history": [],
                 }
+                st.session_state.printable_summary = ""
+                st.session_state.education_checklist = {}
+                st.session_state.epidemiology_snapshot = {}
+                st.session_state.critical_events = []
+                st.success("Conversa e contexto reiniciados.")
+                st.rerun()
+
+            lowered_input = user_input.lower()
+            symptom_candidates = extract_symptom_candidates(user_input)
+            if symptom_candidates:
+                st.session_state.symptom_log.append(
+                    {"raw": user_input, "symptoms": symptom_candidates}
+                )
+
+            if re.search(r"\bquais?\b.*\bsintoma", lowered_input):
+                summary = summarize_symptom_log(st.session_state.symptom_log)
+                response_text = (
+                    summary
+                    + "\n\nSempre consulte um profissional de saude para interpretacao completa."
+                )
+                st.session_state.history.append(
+                    f"<div class='message ai-message'><strong>MedIA:</strong> {response_text}</div>"
+                )
+                st.rerun()
+                return
+
+            st.session_state.epidemiology_monitor.ingest(user_input)
+            st.session_state.epidemiology_snapshot = st.session_state.epidemiology_monitor.export()
+
+            emergency_message = st.session_state.emergency_router.detect(user_input)
+            if emergency_message:
+                st.session_state.history.append(
+                    f"<div class='message ai-message emergency'><strong>MedIA:</strong> {emergency_message}</div>"
+                )
+                st.session_state.critical_events.append(emergency_message)
+                st.rerun()
+
+            medication_alerts = st.session_state.med_checker.check(user_input)
+            if medication_alerts:
+                st.session_state.medication_alerts.extend(medication_alerts)
+                st.session_state.history.append(
+                    "<div class='message ai-message alert'><strong>MedIA:</strong> "
+                    + " ".join(medication_alerts)
+                    + "</div>"
+                )
+
+            planner_state = st.session_state.conversation_planner.plan(
+                user_text=user_input,
+                state={
+                    "exam_findings": st.session_state.exam_findings,
+                    "imaging_findings": st.session_state.imaging_findings,
+                    "wearable_payload": st.session_state.wearable_payload,
+                },
             )
-            return
-        except Exception as exc:  # pragma: no cover - resiliencia
-            friendly = (
-                "MedIA encontrou um erro inesperado ao gerar a resposta. "
-                "Atualize ou tente novamente em instantes."
+            st.session_state.planner_state = planner_state
+
+            fusion_data = st.session_state.fusion_engine.fuse(
+                user_text=user_input,
+                exam_findings=st.session_state.exam_findings,
+                imaging_findings=st.session_state.imaging_findings,
+                wearable_payload=st.session_state.wearable_payload,
             )
+            st.session_state.multimodal_signature = fusion_data
+
+            context_payload, context_meta = build_context_sections()
+            composed_input = user_input
+            if context_payload:
+                composed_input = f"{context_payload}\n\nEntrada do paciente: {user_input}"
+
+            try:
+                response = predict_with_fallback(conversation, composed_input)
+                model_error_context = {}
+            except BadRequestError as exc:
+                error_text = str(exc)
+                model_error_context = {}
+                if "model_decommissioned" in error_text:
+                    friendly = (
+                        "MedIA: o modelo configurado foi descontinuado. "
+                        "Defina `GROQ_MODEL_NAME` para um modelo suportado como "
+                        "`llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, ou outro da lista atual da Groq "
+                        "e tente novamente."
+                    )
+                    st.error(
+                        "Modelo Groq configurado foi descontinuado. Atualize `GROQ_MODEL_NAME` para um modelo suportado "
+                        "(ex.: llama-3.3-70b-versatile ou llama-3.1-8b-instant)."
+                    )
+                    model_error_context["type"] = "model_decommissioned"
+                    model_error_context["detail"] = error_text
+                else:
+                    friendly = (
+                        "MedIA: nao foi possivel gerar uma resposta agora porque o pedido excedeu os limites "
+                        "do modelo. Remova alguns anexos ou reduza o texto e tente novamente."
+                    )
+                    st.error("Falha ao acionar o modelo Groq (BadRequest). Ajuste o contexto e tente de novo.")
+                    model_error_context["type"] = "context_limit"
+                    model_error_context["detail"] = error_text
+                st.session_state.history.append(
+                    f"<div class='message ai-message error'><strong>MedIA:</strong> {friendly}</div>"
+                )
+                st.session_state.active_learning_queue.append(
+                    {
+                        "user": user_input,
+                        "bot": friendly,
+                        "reason": f"BadRequestError: {exc}",
+                    }
+                )
+                return
+            except Exception as exc:  # pragma: no cover - resiliencia
+                friendly = (
+                    "MedIA encontrou um erro inesperado ao gerar a resposta. "
+                    "Atualize ou tente novamente em instantes."
+                )
+                st.session_state.history.append(
+                    f"<div class='message ai-message error'><strong>MedIA:</strong> {friendly}</div>"
+                )
+                st.error(f"Erro inesperado ao consultar o modelo: {exc}")
+                return
+
+            enriched_response = st.session_state.validator.attach_disclaimer(response, context_meta)
+            confidence_result = st.session_state.confidence_calibrator.score(enriched_response, context_meta)
+            st.session_state.confidence_history.append(confidence_result)
+            final_response = (
+                f"{enriched_response}\n\nConfianca estimada: {confidence_result['label']} "
+                f"({confidence_result['score']})."
+            )
+
+            education_hits = st.session_state.education_manager.recommend_from_text(
+                text=f"{user_input}\n{final_response}"
+            )
+            if education_hits:
+                merged = st.session_state.education_recommendations + education_hits
+                seen: set = set()
+                deduped = []
+                for item in merged:
+                    key = (item["title"], item["url"])
+                    if key not in seen:
+                        deduped.append(item)
+                        seen.add(key)
+                st.session_state.education_recommendations = deduped
+
+            try:
+                flagged = st.session_state.active_learning_tracker.should_flag(
+                    user_input,
+                    final_response,
+                    metadata=model_error_context,
+                )
+            except TypeError:
+                flagged = st.session_state.active_learning_tracker.should_flag(
+                    user_input,
+                    final_response,
+                )
+            if flagged:
+                st.session_state.active_learning_queue.append(flagged)
+
             st.session_state.history.append(
-                f"<div class='message ai-message error'><strong>MedIA:</strong> {friendly}</div>"
+                f"<div class='message ai-message'><strong>MedIA:</strong> {final_response}</div>"
             )
-            st.error(f"Erro inesperado ao consultar o modelo: {exc}")
-            return
 
-        enriched_response = st.session_state.validator.attach_disclaimer(response, context_meta)
-        confidence_result = st.session_state.confidence_calibrator.score(enriched_response, context_meta)
-        st.session_state.confidence_history.append(confidence_result)
-        final_response = (
-            f"{enriched_response}\n\nConfianca estimada: {confidence_result['label']} "
-            f"({confidence_result['score']})."
-        )
+            update_question_progress(final_response)
+            st.session_state.printable_summary = final_response
 
-        education_hits = st.session_state.education_manager.recommend_from_text(
-            text=f"{user_input}\n{final_response}"
-        )
-        if education_hits:
-            merged = st.session_state.education_recommendations + education_hits
-            seen: set = set()
-            deduped = []
-            for item in merged:
-                key = (item["title"], item["url"])
-                if key not in seen:
-                    deduped.append(item)
-                    seen.add(key)
-            st.session_state.education_recommendations = deduped
+            if st.session_state.audio_toggle:
+                audio_bytes = generate_tts_audio(final_response)
+                if audio_bytes:
+                    st.session_state.audio_responses.append(audio_bytes)
+                    st.audio(audio_bytes, format="audio/mp3")
+                else:
+                    st.warning("gTTS nao disponivel ou falha ao gerar audio.")
 
-        try:
-            flagged = st.session_state.active_learning_tracker.should_flag(
-                user_input,
-                final_response,
-                metadata=model_error_context,
-            )
-        except TypeError:
-            flagged = st.session_state.active_learning_tracker.should_flag(
-                user_input,
-                final_response,
-            )
-        if flagged:
-            st.session_state.active_learning_queue.append(flagged)
+            st.rerun()
 
-        st.session_state.history.append(
-            f"<div class='message ai-message'><strong>MedIA:</strong> {final_response}</div>"
-        )
+    with patient_tab:
+        st.markdown("<div class='themed-panel'>", unsafe_allow_html=True)
+        render_patient_dashboard()
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        update_question_progress(final_response)
-        st.session_state.printable_summary = final_response
-
-        if st.session_state.audio_toggle:
-            audio_bytes = generate_tts_audio(final_response)
-            if audio_bytes:
-                st.session_state.audio_responses.append(audio_bytes)
-                st.audio(audio_bytes, format="audio/mp3")
-            else:
-                st.warning("gTTS nao disponivel ou falha ao gerar audio.")
-
-        st.rerun()
+    with insights_tab:
+        st.markdown("<div class='themed-panel'>", unsafe_allow_html=True)
+        render_wearable_insights()
+        render_explainability_panel()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown(
         """
