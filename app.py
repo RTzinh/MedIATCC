@@ -855,7 +855,11 @@ def main() -> None:
     render_sidebar()
 
     groq_api_key = st.secrets["GROQ_API_KEY"]
-    model = "llama3-8b-8192"
+    default_model = "llama3-70b-8192"
+    model = os.environ.get("GROQ_MODEL_NAME", "")
+    if not model and "GROQ_MODEL_NAME" in st.secrets:
+        model = st.secrets["GROQ_MODEL_NAME"]
+    model = model or default_model
     groq_chat = ChatGroq(groq_api_key=groq_api_key, model_name=model)
 
     st.title("MedIA")
@@ -949,14 +953,24 @@ def main() -> None:
         try:
             response = predict_with_fallback(conversation, composed_input)
         except BadRequestError as exc:
-            friendly = (
-                "MedIA: nao foi possivel gerar uma resposta agora porque o pedido excedeu os limites "
-                "do modelo. Remova alguns anexos ou reduza o texto e tente novamente."
-            )
+            error_text = str(exc)
+            if "model_decommissioned" in error_text:
+                friendly = (
+                    "MedIA: o modelo configurado foi descontinuado. "
+                    "Defina um novo modelo ativo como `llama3-70b-8192` ou outro disponivel e tente novamente."
+                )
+                st.error(
+                    "Modelo Groq configurado foi descontinuado. Atualize `GROQ_MODEL_NAME` para um modelo suportado."
+                )
+            else:
+                friendly = (
+                    "MedIA: nao foi possivel gerar uma resposta agora porque o pedido excedeu os limites "
+                    "do modelo. Remova alguns anexos ou reduza o texto e tente novamente."
+                )
+                st.error("Falha ao acionar o modelo Groq (BadRequest). Ajuste o contexto e tente de novo.")
             st.session_state.history.append(
                 f"<div class='message ai-message error'><strong>MedIA:</strong> {friendly}</div>"
             )
-            st.error("Falha ao acionar o modelo Groq (BadRequest). Ajuste o contexto e tente de novo.")
             st.session_state.active_learning_queue.append(
                 {
                     "user": user_input,
