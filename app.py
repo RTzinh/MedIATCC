@@ -40,6 +40,11 @@ try:
 except ImportError:  # pragma: no cover
     gTTS = None
 
+try:
+    import qrcode  # type: ignore
+except ImportError:  # pragma: no cover
+    qrcode = None
+
 
 CLINICAL_DISCLAIMER = (
     "Aviso: interpretacoes automatizadas complementam o parecer medico humano e nao substituem atendimento presencial."
@@ -165,6 +170,37 @@ EDUCATION_LIBRARY = {
     ],
 }
 
+THEME_STYLES = {
+    "Claro": {
+        "bg": "#f7fbff",
+        "panel": "#ffffff",
+        "accent": "#2b6cb0",
+        "text": "#1a202c",
+        "accent_soft": "#dbeafe",
+    },
+    "Escuro": {
+        "bg": "#0f172a",
+        "panel": "#1e293b",
+        "accent": "#38bdf8",
+        "text": "#f8fafc",
+        "accent_soft": "#1e3a8a",
+    },
+    "Clinico": {
+        "bg": "#edf7f6",
+        "panel": "#ffffff",
+        "accent": "#0f766e",
+        "text": "#0b1120",
+        "accent_soft": "#c8f3ed",
+    },
+}
+
+ICON_EMERGENCY = "🚨"
+ICON_EXAM = "🧪"
+ICON_INTERACTION = "💊"
+ICON_WEARABLE = "⌚"
+ICON_EDUCATION = "📘"
+ICON_STEP = "🩺"
+
 
 def ensure_session_defaults() -> None:
     defaults = {
@@ -191,6 +227,18 @@ def ensure_session_defaults() -> None:
         "confidence_history": [],
         "explainability_notes": [],
         "symptom_log": [],
+        "theme": "Claro",
+        "font_scale": 1.0,
+        "question_progress": {
+            "total": 10,
+            "answered": 0,
+            "current": 1,
+            "history": [],
+        },
+        "education_checklist": {},
+        "memory_window": 60,
+        "printable_summary": "",
+        "dashboard_tab": "Sintomas",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -684,6 +732,252 @@ def summarize_symptom_log(items: List[Dict[str, Any]]) -> str:
     return "Sintomas mencionados anteriormente: " + "; ".join(unique)
 
 
+def apply_theme_settings() -> None:
+    theme = st.session_state.get("theme", "Claro")
+    font_scale = st.session_state.get("font_scale", 1.0)
+    palette = THEME_STYLES.get(theme, THEME_STYLES["Claro"])
+    css = f"""
+    <style>
+    .stApp {{
+        background-color: {palette['bg']} !important;
+        color: {palette['text']} !important;
+        font-size: {font_scale}em;
+    }}
+    .themed-panel {{
+        background: {palette['panel']};
+        border: 1px solid {palette['accent_soft']};
+        border-radius: 14px;
+        padding: 18px;
+        margin-bottom: 14px;
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+    }}
+    .step-card {{
+        background: {palette['panel']};
+        border-left: 6px solid {palette['accent']};
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin-bottom: 10px;
+        color: {palette['text']};
+    }}
+    .step-card.inactive {{
+        border-left-color: {palette['accent_soft']};
+        opacity: 0.6;
+    }}
+    .badge-accent {{
+        background: {palette['accent_soft']};
+        color: {palette['accent']};
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 0.75em;
+        font-weight: 600;
+    }}
+    .emergency-banner {{
+        background: #fee2e2;
+        border: 1px solid #b91c1c;
+        border-radius: 12px;
+        padding: 14px;
+        color: #7f1d1d;
+        margin-bottom: 12px;
+    }}
+    .warning-banner {{
+        background: #fef3c7;
+        border: 1px solid #d97706;
+        border-radius: 12px;
+        padding: 14px;
+        color: #92400e;
+        margin-bottom: 12px;
+    }}
+    .education-card {{
+        border: 1px solid {palette['accent_soft']};
+        border-radius: 12px;
+        padding: 12px;
+        background: {palette['panel']};
+        margin-bottom: 10px;
+    }}
+    .dashboard-tab button[role="tab"] {{
+        border-radius: 999px !important;
+    }}
+    </style>
+    """
+    st.markdown(css, unsafe_allow_html=True)
+
+
+def render_stepper() -> None:
+    data = st.session_state.question_progress
+    total = data.get("total", 10)
+    answered = data.get("answered", 0)
+    current = data.get("current", answered + 1)
+    st.markdown(
+        f"### {ICON_STEP} Progresso da triagem ({answered}/{total})",
+        unsafe_allow_html=True,
+    )
+    st.progress(min(answered / total if total else 0, 1.0))
+    cols = st.columns(5)
+    history = data.get("history", [])
+    for idx in range(total):
+        step_number = idx + 1
+        col = cols[idx % 5]
+        status_class = ""
+        badge = "Concluida" if step_number <= answered else (
+            "Atual" if step_number == current else "Pendente"
+        )
+        if step_number > answered + 1:
+            status_class = " inactive"
+        snippet = history[idx] if idx < len(history) else "Aguardando pergunta."
+        with col:
+            st.markdown(
+                f"""
+                <div class="step-card{status_class}">
+                    <div class="badge-accent">Pergunta {step_number}</div>
+                    <p style="margin-top:6px;">{snippet}</p>
+                    <small>{badge}</small>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def update_question_progress(response: str) -> None:
+    data = st.session_state.question_progress
+    total = data.get("total", 10)
+    lower = response.lower()
+    match = re.search(r"pergunt[ao]*\s*(\d+)", lower)
+    if match:
+        number = int(match.group(1))
+        data["current"] = min(max(number, 1), total)
+        data["answered"] = max(data["answered"], min(number - 1, total))
+    prompt_snippet = None
+    lines = [line.strip() for line in response.splitlines() if line.strip()]
+    for line in lines:
+        if "pergunta" in line.lower():
+            prompt_snippet = line
+            break
+    history = data.setdefault("history", [])
+    if prompt_snippet:
+        if len(history) < data["current"]:
+            history.append(prompt_snippet[:120])
+        else:
+            history[data["current"] - 1] = prompt_snippet[:120]
+    elif not history:
+        history.extend([""] * total)
+    st.session_state.question_progress = data
+
+
+def generate_qr_code(content: str) -> Optional[bytes]:
+    if not qrcode:
+        return None
+    try:
+        qr = qrcode.QRCode(box_size=2, border=2)
+        qr.add_data(content[:500])
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        buffer.seek(0)
+        return buffer.getvalue()
+    except Exception:
+        return None
+
+
+def render_patient_dashboard() -> None:
+    st.markdown("### 🗂️ Painel do paciente", unsafe_allow_html=True)
+    tabs = st.tabs(["Sintomas", "Exames", "Alertas", "Emergência"])
+    with tabs[0]:
+        if st.session_state.symptom_log:
+            for entry in st.session_state.symptom_log[-10:]:
+                st.markdown(
+                    f"- **Sintomas**: {', '.join(entry.get('symptoms', []))} \n"
+                    f"  <small>{entry.get('raw')}</small>",
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.caption("Nenhum sintoma registrado ainda.")
+    with tabs[1]:
+        if st.session_state.exam_findings or st.session_state.imaging_findings:
+            for item in st.session_state.exam_findings[-5:]:
+                st.markdown(f"- {ICON_EXAM} **{item['name']}**")
+            for item in st.session_state.imaging_findings[-5:]:
+                st.markdown(f"- 🩻 **{item['name']}**")
+        else:
+            st.caption("Nenhum exame anexado.")
+    with tabs[2]:
+        if st.session_state.medication_alerts:
+            for alert in st.session_state.medication_alerts[-5:]:
+                st.markdown(f"- {ICON_INTERACTION} {alert}")
+        else:
+            st.caption("Nenhum alerta farmacológico no momento.")
+    with tabs[3]:
+        if st.session_state.critical_events:
+            st.markdown(
+                f"<div class='emergency-banner'>{ICON_EMERGENCY} {st.session_state.critical_events[-1]}</div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                "[Ligar 192 (SAMU)](tel:192) | [Ligar 190 (Polícia)](tel:190)",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.caption("Nenhum evento crítico detectado.")
+
+
+def render_wearable_insights() -> None:
+    if not st.session_state.wearable_payload:
+        st.caption("Sem dados recentes de wearables.")
+        return
+    payload = st.session_state.wearable_payload
+    st.markdown(f"#### {ICON_WEARABLE} Insights de wearables", unsafe_allow_html=True)
+    for key, value in payload.items():
+        if isinstance(value, list) and value and all(isinstance(v, (int, float)) for v in value):
+            st.line_chart(value, height=120)
+            st.caption(f"{key.title()} com {len(value)} pontos coletados.")
+        else:
+            st.text(f"{key}: {value}")
+
+
+def render_explainability_panel() -> None:
+    st.markdown("#### 🔎 Como cheguei aqui?", unsafe_allow_html=True)
+    bullets: List[str] = []
+    if st.session_state.exam_findings:
+        bullets.append(f"{ICON_EXAM} Exames interpretados: {len(st.session_state.exam_findings)}")
+    if st.session_state.imaging_findings:
+        bullets.append(f"🩻 Radiografias analisadas: {len(st.session_state.imaging_findings)}")
+    if st.session_state.symptom_log:
+        bullets.append(f"{ICON_STEP} Sintomas chave: {', '.join(st.session_state.symptom_log[-1].get('symptoms', [])[:4])}")
+    if bullets:
+        for bullet in bullets:
+            st.markdown(f"- {bullet}")
+    else:
+        st.caption("Ainda coletando informações para explicabilidade.")
+    if st.session_state.explainability_notes:
+        st.markdown("Notas dos últimos achados de imagem:")
+        for note in st.session_state.explainability_notes[-3:]:
+            st.markdown(f"- {note}")
+
+
+def render_education_cards() -> None:
+    if not st.session_state.education_recommendations:
+        st.caption("Recomende exames ou descreva sintomas para ativar materiais educativos.")
+        return
+    checklist = st.session_state.education_checklist
+    for idx, rec in enumerate(st.session_state.education_recommendations):
+        key = rec["url"]
+        checked = checklist.get(key, False)
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.markdown(
+                f"""
+                <div class="education-card">
+                    <strong>{rec['title']}</strong> <span class='badge-accent'>{rec['type']}</span><br/>
+                    <a href="{rec['url']}" target="_blank">Abrir material</a>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with col2:
+            checklist[key] = st.checkbox("Lido", value=checked, key=f"edu_{idx}")
+    st.session_state.education_checklist = checklist
+
+
 def build_context_sections() -> (str, Dict[str, Any]):
     exam_context = st.session_state.exam_pipeline.render_for_prompt(st.session_state.exam_findings)
     imaging_context = st.session_state.radiography_service.render_for_prompt(
@@ -741,6 +1035,39 @@ def generate_tts_audio(text: str, language: str = "pt") -> Optional[bytes]:
 def render_sidebar() -> None:
     with st.sidebar:
         st.header("Fluxos auxiliares")
+
+        theme_choice = st.radio(
+            "Tema visual",
+            options=list(THEME_STYLES.keys()),
+            index=list(THEME_STYLES.keys()).index(st.session_state.theme)
+            if st.session_state.theme in THEME_STYLES
+            else 0,
+            horizontal=True,
+        )
+        st.session_state.theme = theme_choice
+        font_scale = st.slider(
+            "Tamanho da fonte",
+            min_value=0.9,
+            max_value=1.4,
+            value=float(st.session_state.font_scale),
+            step=0.05,
+        )
+        st.session_state.font_scale = font_scale
+        memory_window = st.slider(
+            "Memoria da IA (trocas consideradas)",
+            min_value=10,
+            max_value=120,
+            value=int(st.session_state.memory_window),
+            step=5,
+        )
+        if memory_window != st.session_state.memory_window:
+            st.session_state.memory_window = memory_window
+            st.session_state.memory.k = memory_window
+            messages = getattr(st.session_state.memory.chat_memory, "messages", [])
+            if messages and len(messages) > memory_window:
+                st.session_state.memory.chat_memory.messages = messages[-memory_window:]
+
+        st.markdown("---")
 
         if st.session_state.symptom_log:
             with st.expander("Resumo rapido de sintomas", expanded=False):
@@ -802,13 +1129,7 @@ def render_sidebar() -> None:
 
         st.markdown("---")
         st.subheader("Educacao personalizada")
-        if st.session_state.education_recommendations:
-            for rec in st.session_state.education_recommendations[:5]:
-                st.markdown(
-                    f"- **{rec['title']}** ({rec['type']}) — [Acessar]({rec['url']})"
-                )
-        else:
-            st.caption("Recomende exames ou descreva sintomas para obter materiais.")
+        render_education_cards()
         selected_category = st.selectbox(
             "Explorar categoria manualmente",
             options=["Selecione"] + st.session_state.education_manager.list_categories(),
@@ -820,6 +1141,26 @@ def render_sidebar() -> None:
                     f"* `{selected_category}` -> **{rec['title']}** ({rec['type']})"
                 )
 
+        st.markdown("---")
+        st.subheader("Ficha para imprimir")
+        if st.session_state.printable_summary:
+            st.text_area(
+                "Resumo mais recente",
+                value=st.session_state.printable_summary,
+                height=160,
+                disabled=True,
+            )
+            qr_bytes = generate_qr_code(st.session_state.printable_summary)
+            if qr_bytes:
+                st.image(qr_bytes, caption="Compartilhe via QR Code", use_column_width=False)
+            st.download_button(
+                "Baixar resumo (.txt)",
+                st.session_state.printable_summary.encode("utf-8"),
+                file_name="medIA_resumo.txt",
+                mime="text/plain",
+            )
+        else:
+            st.caption("Interaja com o MedIA para gerar um resumo imprimivel.")
         st.markdown("---")
         st.subheader("Monitoramento epidemiologico")
         if st.session_state.epidemiology_snapshot:
@@ -929,6 +1270,7 @@ def main() -> None:
     )
 
     ensure_session_defaults()
+    apply_theme_settings()
     render_sidebar()
 
     groq_api_key = st.secrets["GROQ_API_KEY"]
@@ -955,6 +1297,22 @@ def main() -> None:
         "Sou um sistema de apoio medico com analise de exames e radiografias. "
         "Sempre consulte um profissional de saude para confirmacao."
     )
+
+    with st.container():
+        st.markdown("<div class='themed-panel'>", unsafe_allow_html=True)
+        render_stepper()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with st.container():
+        st.markdown("<div class='themed-panel'>", unsafe_allow_html=True)
+        render_patient_dashboard()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with st.container():
+        st.markdown("<div class='themed-panel'>", unsafe_allow_html=True)
+        render_wearable_insights()
+        render_explainability_panel()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     system_prompt = (
         "Voce e um especialista em triagem medica digital. "
@@ -985,6 +1343,8 @@ def main() -> None:
 
     render_history()
 
+    render_history()
+
     user_input = st.chat_input("Digite seus sintomas", key="user_input")
     if not user_input and st.session_state.pending_voice_input:
         user_input = st.session_state.pending_voice_input
@@ -1007,6 +1367,16 @@ def main() -> None:
             st.session_state.multimodal_signature = {}
             st.session_state.pending_voice_input = ""
             st.session_state.audio_responses = []
+            st.session_state.question_progress = {
+                "total": 10,
+                "answered": 0,
+                "current": 1,
+                "history": [],
+            }
+            st.session_state.printable_summary = ""
+            st.session_state.education_checklist = {}
+            st.session_state.epidemiology_snapshot = {}
+            st.session_state.critical_events = []
             st.success("Conversa e contexto reiniciados.")
             st.rerun()
 
@@ -1154,6 +1524,9 @@ def main() -> None:
         st.session_state.history.append(
             f"<div class='message ai-message'><strong>MedIA:</strong> {final_response}</div>"
         )
+
+        update_question_progress(final_response)
+        st.session_state.printable_summary = final_response
 
         if st.session_state.audio_toggle:
             audio_bytes = generate_tts_audio(final_response)
