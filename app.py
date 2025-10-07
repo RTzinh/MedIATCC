@@ -805,6 +805,18 @@ def apply_theme_settings() -> None:
     .dashboard-tab button[role="tab"] {{
         border-radius: 999px !important;
     }}
+    .stTabs [data-baseweb="tab-list"] {{
+        background: transparent;
+        border-bottom: 1px solid {palette['accent_soft']};
+        margin-bottom: 8px;
+    }}
+    .stTabs [data-baseweb="tab"] {{
+        background: transparent;
+    }}
+    .stTabs [data-baseweb="tab-panel"] > div:first-child {{
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }}
     div[data-testid="stChatInput"] {{
         position: fixed;
         bottom: 18px;
