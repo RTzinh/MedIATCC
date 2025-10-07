@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import streamlit as st
+from groq import BadRequestError
 from langchain.chains import LLMChain
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder
@@ -583,6 +584,15 @@ class ExplainabilityEngine:
         )
 
 
+def truncate_text(value: str, limit: int = 6000) -> str:
+    if len(value) <= limit:
+        return value
+    return (
+        value[:limit]
+        + "\n\n[Contexto reduzido automaticamente para manter a compatibilidade com o modelo.]"
+    )
+
+
 def build_context_sections() -> (str, Dict[str, Any]):
     exam_context = st.session_state.exam_pipeline.render_for_prompt(st.session_state.exam_findings)
     imaging_context = st.session_state.radiography_service.render_for_prompt(
@@ -612,7 +622,7 @@ def build_context_sections() -> (str, Dict[str, Any]):
             + fusion_data["summary"]
             + f" Vetor={fusion_data.get('vector')}"
         )
-    context_payload = "\n\n".join(pieces)
+    context_payload = truncate_text("\n\n".join(pieces), limit=5000)
     context_meta = {
         "critical_flags": st.session_state.critical_events,
         "medication_alerts": medication_alerts,
@@ -904,8 +914,38 @@ def main() -> None:
         composed_input = user_input
         if context_payload:
             composed_input = f"{context_payload}\n\nEntrada do paciente: {user_input}"
+        composed_input = truncate_text(composed_input, limit=7000)
 
-        response = conversation.predict(human_input=composed_input)
+        try:
+            response = conversation.predict(human_input=composed_input)
+        except BadRequestError as exc:
+            friendly = (
+                "MedIA: nao foi possivel gerar uma resposta agora porque o pedido excedeu os limites "
+                "do modelo. Remova alguns anexos ou reduza o texto e tente novamente."
+            )
+            st.session_state.history.append(
+                f"<div class='message ai-message error'><strong>MedIA:</strong> {friendly}</div>"
+            )
+            st.error("Falha ao acionar o modelo Groq (BadRequest). Ajuste o contexto e tente de novo.")
+            st.session_state.active_learning_queue.append(
+                {
+                    "user": user_input,
+                    "bot": friendly,
+                    "reason": f"BadRequestError: {exc}",
+                }
+            )
+            return
+        except Exception as exc:  # pragma: no cover - resiliencia
+            friendly = (
+                "MedIA encontrou um erro inesperado ao gerar a resposta. "
+                "Atualize ou tente novamente em instantes."
+            )
+            st.session_state.history.append(
+                f"<div class='message ai-message error'><strong>MedIA:</strong> {friendly}</div>"
+            )
+            st.error(f"Erro inesperado ao consultar o modelo: {exc}")
+            return
+
         enriched_response = st.session_state.validator.attach_disclaimer(response, context_meta)
         confidence_result = st.session_state.confidence_calibrator.score(enriched_response, context_meta)
         st.session_state.confidence_history.append(confidence_result)
