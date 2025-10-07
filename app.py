@@ -813,9 +813,20 @@ def apply_theme_settings() -> None:
     .stTabs [data-baseweb="tab"] {{
         background: transparent;
     }}
+    .stTabs [data-baseweb="tab-panel"] {{
+        background: transparent !important;
+        border: none !important;
+    }}
     .stTabs [data-baseweb="tab-panel"] > div:first-child {{
         margin-top: 0 !important;
         padding-top: 0 !important;
+    }}
+    .stProgress > div {{
+        background: {palette['accent_soft']} !important;
+        border-radius: 999px !important;
+    }}
+    .stProgress > div > div {{
+        background: {palette['accent']} !important;
     }}
     div[data-testid="stChatInput"] {{
         position: fixed;
