@@ -202,6 +202,10 @@ ICON_EDUCATION = "[EDU]"
 ICON_STEP = "[TRIAGEM]"
 ICON_IMAGING = "[IMAGEM]"
 
+MEDICATION_DISCLAIMER = (
+    "Estas informacoes nao substituem orientacao medica presencial. Consulte seu medico ou farmacêutico."
+)
+
 MEDICATION_MONOGRAPHS = {
     "roacutan": {
         "aliases": ["isotretinoina", "isotretinoína", "acutane"],
@@ -225,6 +229,33 @@ MEDICATION_MONOGRAPHS = {
         "references": [
             "Bula oficial: https://www.anvisa.gov.br/datavisa/fila_bula/frmVisualizarBula.asp?pNuTransacao=xxxxx",
             "Sociedade Brasileira de Dermatologia - Diretrizes de Acne",
+        ],
+    },
+    "ibuprofeno": {
+        "aliases": ["ibupr", "brufen", "advil", "motrin"],
+        "class": "Anti-inflamatorio nao esteroide (AINE)",
+        "indications": [
+            "Dor leve a moderada (cefaleia, dor muscular, pos-operatorio, dismenorreia)",
+            "Processos inflamatorios agudos",
+            "Febre",
+        ],
+        "contra": [
+            "Ulcera peptica ativa ou historico recorrente",
+            "Insuficiencia renal grave",
+            "Insuficiencia hepatica grave",
+            "Terceiro trimestre de gestacao",
+            "Asma sensivel a AINEs",
+        ],
+        "warnings": [
+            "Usar a menor dose eficaz pelo menor tempo possivel",
+            "Pode elevar pressao arterial e reduzir eficacia de anti-hipertensivos",
+            "Associado a risco de eventos cardiovasculares e gastrointestinais",
+            "Monitorar funcao renal em pacientes idosos ou com doencas pre-existentes",
+        ],
+        "dose": "200 a 400 mg por via oral a cada 6-8 horas conforme necessidade; dose maxima usual 1200 mg/dia sem supervisao medica",
+        "references": [
+            "Bula oficial: https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=IBUPROFENO",
+            "Diretrizes Sociedade Brasileira de Pediatria - Uso de AINEs",
         ],
     },
     "dipirona": {
@@ -852,8 +883,64 @@ def generate_medication_response(med_key: str) -> str:
         for ref in references:
             lines.append(f"- {ref}")
         lines.append("")
-    lines.append("Consulte sempre um profissional de saude para avaliacao individualizada.")
+    lines.append(MEDICATION_DISCLAIMER)
     return "\n".join(lines)
+
+
+LAB_RANGES = {
+    "hemoglobina": {"low": 12.0, "high": 17.5, "unit": "g/dL", "label": "[hemoglobina]"},
+    "hemacias": {"low": 4.0, "high": 6.0, "unit": "milhoes/mm3", "label": "[hemacias]"},
+    "eritrocitos": {"low": 4.0, "high": 6.0, "unit": "milhoes/mm3", "label": "[eritrocitos]"},
+    "hematocrito": {"low": 37.0, "high": 52.0, "unit": "%", "label": "[hematocrito]"},
+    "leucocitos": {"low": 4000.0, "high": 11000.0, "unit": "/mm3", "label": "[leucocitos]"},
+    "leucócitos": {"low": 4000.0, "high": 11000.0, "unit": "/mm3", "label": "[leucocitos]"},
+    "plaquetas": {"low": 150000.0, "high": 450000.0, "unit": "/mm3", "label": "[plaquetas]"},
+}
+
+
+def parse_numeric_value(value: Any) -> Optional[float]:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, (list, tuple)):
+        for part in value:
+            parsed = parse_numeric_value(part)
+            if parsed is not None:
+                return parsed
+        return None
+    text = str(value)
+    match = re.search(r"-?\d+(?:[.,]\d+)?", text)
+    if match:
+        return float(match.group(0).replace(",", "."))
+    return None
+
+
+def analyze_exam_item(item: Dict[str, Any]) -> List[str]:
+    findings: List[str] = []
+    normalized = item.get("normalized") or {}
+    raw_text = item.get("raw_text", "")
+    for key, meta in LAB_RANGES.items():
+        value = normalized.get(key)
+        if value is None and raw_text:
+            pattern = rf"{key}[^0-9-]*([-]?\d+(?:[.,]\d+)?)"
+            match = re.search(pattern, raw_text, flags=re.IGNORECASE)
+            if match:
+                value = match.group(1)
+        if value is None:
+            continue
+        numeric = parse_numeric_value(value)
+        if numeric is None:
+            continue
+        low, high = meta["low"], meta["high"]
+        label = meta["label"]
+        if numeric < low:
+            findings.append(
+                f"{label}: valor {numeric} abaixo do intervalo ideal ({low}-{high} {meta['unit']}). Sugerir avaliacao clinica."
+            )
+        elif numeric > high:
+            findings.append(
+                f"{label}: valor {numeric} acima do intervalo ideal ({low}-{high} {meta['unit']}). Sugerir correlacionar com sintomas."
+            )
+    return findings
 
 
 def apply_theme_settings() -> None:
@@ -1170,6 +1257,11 @@ def build_context_sections() -> (str, Dict[str, Any]):
     pieces = []
     if exam_context:
         pieces.append("Resumo de exames estruturados:\n" + exam_context)
+        analyses = []
+        for item in st.session_state.exam_findings:
+            analyses.extend(analyze_exam_item(item))
+        if analyses:
+            pieces.append("Analise automatica de exames:\n" + "\n".join(f"- {msg}" for msg in analyses))
     if imaging_context:
         pieces.append("Resumo de radiografias:\n" + imaging_context)
     if wearable_context:
@@ -1693,7 +1785,11 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
                 current = progress.get("current", 1)
                 if 1 <= current <= progress["total"] and history[current - 1]:
                     progress["answered"] = max(progress["answered"], current)
+                progress["answered"] = min(progress["answered"], progress["total"])
+                progress["current"] = min(progress["answered"] + 1, progress["total"])
                 st.session_state.question_progress = progress
+            elif not st.session_state.triage_mode:
+                reset_question_progress()
 
             context_payload, context_meta = build_context_sections()
             request_type = (
