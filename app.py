@@ -1584,15 +1584,11 @@ def main() -> None:
             st.rerun()
 
     with patient_tab:
-        st.markdown("<div class='themed-panel'>", unsafe_allow_html=True)
         render_patient_dashboard()
-        st.markdown("</div>", unsafe_allow_html=True)
 
     with insights_tab:
-        st.markdown("<div class='themed-panel'>", unsafe_allow_html=True)
         render_wearable_insights()
         render_explainability_panel()
-        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown(
         """
