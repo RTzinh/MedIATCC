@@ -240,6 +240,7 @@ def ensure_session_defaults() -> None:
         "memory_window": 60,
         "printable_summary": "",
         "dashboard_tab": "Sintomas",
+        "triage_mode": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -855,6 +856,8 @@ def apply_theme_settings() -> None:
 
 
 def render_progress_overview(show_details: bool = False, render_bar: bool = True) -> None:
+    if not st.session_state.get("triage_mode", False):
+        return
     data = st.session_state.question_progress
     total = data.get("total", 10)
     answered = data.get("answered", 0)
@@ -896,6 +899,8 @@ def render_progress_overview(show_details: bool = False, render_bar: bool = True
 
 
 def update_question_progress(response: str) -> None:
+    if not st.session_state.get("triage_mode", False):
+        return
     data = st.session_state.question_progress
     total = data.get("total", 10)
     lower = response.lower()
@@ -904,7 +909,7 @@ def update_question_progress(response: str) -> None:
         number = int(match.group(1))
         number = min(max(number, 1), total)
         data["current"] = number
-        data["answered"] = max(data["answered"], min(number, total))
+        data["answered"] = max(data["answered"], min(number - 1, total))
     prompt_snippet = None
     lines = [line.strip() for line in response.splitlines() if line.strip()]
     for line in lines:
@@ -912,13 +917,10 @@ def update_question_progress(response: str) -> None:
             prompt_snippet = line
             break
     history = data.setdefault("history", [])
+    if len(history) < total:
+        history.extend([""] * (total - len(history)))
     if prompt_snippet:
-        if len(history) < data["current"]:
-            history.append(prompt_snippet[:120])
-        else:
-            history[data["current"] - 1] = prompt_snippet[:120]
-    elif not history:
-        history.extend([""] * total)
+        history[data["current"] - 1] = prompt_snippet[:120]
     st.session_state.question_progress = data
 
 
@@ -1059,6 +1061,11 @@ def build_context_sections() -> (str, Dict[str, Any]):
         pieces.append(wearable_context)
     if medication_alerts:
         pieces.append("Alertas farmacologicos ativos: " + "; ".join(sorted(set(medication_alerts))))
+    triage_state = "ativo" if st.session_state.get("triage_mode", False) else "inativo"
+    pieces.append(f"Status da triagem: {triage_state}")
+    symptom_report = build_symptom_report()
+    if "Sem sintomas" not in symptom_report:
+        pieces.append(symptom_report)
     plan_state = st.session_state.planner_state or {}
     if plan_state.get("plan_prompt"):
         pieces.append("Plano conversacional:\n" + plan_state["plan_prompt"])
@@ -1410,7 +1417,8 @@ def main() -> None:
                 f"<div class='message user-message'><strong>Voce:</strong> {user_input}</div>"
             )
 
-            if user_input.strip().lower() in {"limpar conversa", "reset", "reiniciar"}:
+            normalized_input = user_input.strip().lower()
+            if normalized_input in {"limpar conversa", "reset", "reiniciar"}:
                 st.session_state.history = []
                 st.session_state.memory.clear()
                 st.session_state.symptom_log = []
@@ -1432,17 +1440,69 @@ def main() -> None:
                 st.session_state.education_checklist = {}
                 st.session_state.epidemiology_snapshot = {}
                 st.session_state.critical_events = []
+                st.session_state.triage_mode = False
                 st.success("Conversa e contexto reiniciados.")
                 st.rerun()
 
-            lowered_input = user_input.lower()
+            start_keywords = [
+                "iniciar triagem",
+                "começar triagem",
+                "comecar triagem",
+                "fazer triagem",
+                "continuar triagem",
+                "retomar triagem",
+            ]
+            stop_keywords = [
+                "parar triagem",
+                "encerrar triagem",
+                "cancelar triagem",
+                "finalizar triagem",
+                "sem triagem",
+            ]
+            start_requested = any(keyword in normalized_input for keyword in start_keywords)
+            stop_requested = any(keyword in normalized_input for keyword in stop_keywords)
+
+            general_keywords = [
+                "remedio",
+                "remédio",
+                "medicamento",
+                "bula",
+                "posologia",
+                "dose",
+                "efeito",
+                "tratamento",
+                "doenca",
+                "doença",
+                "diagnostico",
+                "diagnóstico",
+                "exame",
+                "resultado",
+                "sintoma",
+                "prevenir",
+            ]
+            is_direct_query = any(keyword in normalized_input for keyword in general_keywords)
+
             symptom_candidates = extract_symptom_candidates(user_input)
             if symptom_candidates:
                 st.session_state.symptom_log.append(
                     {"raw": user_input, "symptoms": symptom_candidates}
                 )
 
-            if re.search(r"\bquais?\b.*\bsintoma", lowered_input):
+            if stop_requested:
+                st.session_state.triage_mode = False
+            elif start_requested:
+                st.session_state.triage_mode = True
+            elif (
+                not st.session_state.triage_mode
+                and symptom_candidates
+                and any(trigger in normalized_input for trigger in ["dor", "sinto", "tenho", "estou com", "sentindo", "sintomas"])
+            ):
+                st.session_state.triage_mode = True
+
+            if st.session_state.triage_mode and is_direct_query and not start_requested:
+                st.session_state.triage_mode = False
+
+            if re.search(r"\bquais?\b.*\bsintoma", normalized_input):
                 summary = summarize_symptom_log(st.session_state.symptom_log)
                 response_text = (
                     summary
@@ -1492,10 +1552,30 @@ def main() -> None:
             )
             st.session_state.multimodal_signature = fusion_data
 
+            if st.session_state.triage_mode and not is_direct_query:
+                progress = st.session_state.question_progress
+                history = progress.setdefault("history", [])
+                if len(history) < progress["total"]:
+                    history.extend([""] * (progress["total"] - len(history)))
+                current = progress.get("current", 1)
+                if 1 <= current <= progress["total"] and history[current - 1]:
+                    progress["answered"] = max(progress["answered"], current)
+                st.session_state.question_progress = progress
+
             context_payload, context_meta = build_context_sections()
-            composed_input = user_input
+            request_type = (
+                "pergunta direta"
+                if is_direct_query
+                else ("fluxo de triagem" if st.session_state.triage_mode else "conversa geral")
+            )
+            meta_lines = [
+                f"Status da triagem: {'ativo' if st.session_state.triage_mode else 'inativo'}",
+                f"Tipo de interacao: {request_type}",
+            ]
+            meta_block = "\n".join(meta_lines)
+            composed_input = meta_block + "\n\nEntrada do paciente: " + user_input
             if context_payload:
-                composed_input = f"{context_payload}\n\nEntrada do paciente: {user_input}"
+                composed_input = f"{context_payload}\n\n{meta_block}\n\nEntrada do paciente: {user_input}"
 
             try:
                 response = predict_with_fallback(conversation, composed_input)
@@ -1586,7 +1666,8 @@ def main() -> None:
                 f"<div class='message ai-message'><strong>MedIA:</strong> {final_response}</div>"
             )
 
-            update_question_progress(final_response)
+            if st.session_state.triage_mode:
+                update_question_progress(final_response)
             st.session_state.printable_summary = build_symptom_report()
 
             if st.session_state.audio_toggle:
@@ -1598,7 +1679,6 @@ def main() -> None:
                     st.warning("gTTS nao disponivel ou falha ao gerar audio.")
 
             st.rerun()
-
     with patient_tab:
         render_patient_dashboard()
 
