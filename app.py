@@ -202,6 +202,57 @@ ICON_EDUCATION = "[EDU]"
 ICON_STEP = "[TRIAGEM]"
 ICON_IMAGING = "[IMAGEM]"
 
+MEDICATION_MONOGRAPHS = {
+    "roacutan": {
+        "aliases": ["isotretinoina", "isotretinoína", "acutane"],
+        "class": "Retinoide oral para tratamento de acne nodular grave",
+        "indications": [
+            "Acne nodular, conglobata ou resistente a outros tratamentos",
+        ],
+        "contra": [
+            "Gravidez e lactacao (teratogenico)",
+            "Insuficiencia hepatica grave",
+            "Hiperlipidemia nao controlada",
+            "Uso concomitante de tetraciclinas",
+        ],
+        "warnings": [
+            "Obrigatorio programa de contracepcao eficaz em pacientes em idade fertil",
+            "Monitorar transaminases e lipideos periodicamente",
+            "Pode causar ressecamento cutaneo, labial e ocular",
+            "Risco de alteracoes psiquiatricas (depressao, ideacao suicida)",
+        ],
+        "dose": "0,5 a 1 mg/kg/dia, via oral, fracionada em 1 a 2 tomadas com alimentos; duracao media de 16 a 24 semanas",
+        "references": [
+            "Bula oficial: https://www.anvisa.gov.br/datavisa/fila_bula/frmVisualizarBula.asp?pNuTransacao=xxxxx",
+            "Sociedade Brasileira de Dermatologia - Diretrizes de Acne",
+        ],
+    },
+    "dipirona": {
+        "aliases": ["metamizol", "novalgina", "dipirona sodica", "dipirona sódica"],
+        "class": "Analgésico e antipirético não opioide",
+        "indications": [
+            "Dor leve a moderada (cefaleia, dor muscular, pos-operatorio)",
+            "Febre refrataria a outros antipireticos",
+        ],
+        "contra": [
+            "Hipersensibilidade a pirazolonas ou pirazolidinas",
+            "Historico de agranulocitose induzida por dipirona",
+            "Deficiencia de glicose-6-fosfato desidrogenase",
+            "Terceiro trimestre de gestacao (risco de fechamento precoce do ducto arterioso)",
+        ],
+        "warnings": [
+            "Monitorar sinais de reacoes hematologicas (agranulocitose, leucopenia)",
+            "Pode causar reacoes anafilaticas graves; usar com cautela em pacientes asmáticos",
+            "Evitar uso cronico sem supervisao medica",
+        ],
+        "dose": "500 mg a 1 g por via oral a cada 6-8 horas conforme necessidade; dose maxima diaria 4 g em adultos",
+        "references": [
+            "Bula oficial: https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=DIPIRONA",
+            "Manual de condutas clínicas - Ministério da Saúde",
+        ],
+    },
+}
+
 
 def ensure_session_defaults() -> None:
     defaults = {
@@ -739,6 +790,70 @@ def build_symptom_report() -> str:
         return "Sem sintomas registrados no momento."
     prettified = [token.replace("_", " ").capitalize() for token in tokens]
     return "Sintomas relatados: " + ", ".join(prettified)
+
+
+def reset_question_progress() -> None:
+    st.session_state.question_progress = {
+        "total": 10,
+        "answered": 0,
+        "current": 1,
+        "history": [],
+    }
+
+
+def find_medication_query(text: str) -> Optional[str]:
+    lowered = text.lower()
+    trigger_terms = (
+        "bula",
+        "posologia",
+        "dose",
+        "dosagem",
+        "como tomar",
+        "como usar",
+        "indicacao",
+        "efeito colateral",
+    )
+    if not any(term in lowered for term in trigger_terms):
+        return None
+    for key, data in MEDICATION_MONOGRAPHS.items():
+        aliases = [key] + data.get("aliases", [])
+        if any(alias in lowered for alias in aliases):
+            return key
+    return None
+
+
+def generate_medication_response(med_key: str) -> str:
+    data = MEDICATION_MONOGRAPHS.get(med_key)
+    if not data:
+        return ""
+    lines = [
+        f"[FARMA] Informacoes essenciais sobre {med_key.capitalize()} ({data.get('class', 'Medicamento')})",
+        "",
+        "**Indicacoes principais:**",
+    ]
+    for item in data.get("indications", []):
+        lines.append(f"- {item}")
+    lines.append("")
+    lines.append("**Contraindicacoes:**")
+    for item in data.get("contra", []):
+        lines.append(f"- {item}")
+    lines.append("")
+    lines.append("**Alertas e precaucoes:**")
+    for item in data.get("warnings", []):
+        lines.append(f"- {item}")
+    lines.append("")
+    dose = data.get("dose")
+    if dose:
+        lines.append(f"**Posologia orientativa:** {dose}")
+        lines.append("")
+    references = data.get("references", [])
+    if references:
+        lines.append("**Referencias confiaveis:**")
+        for ref in references:
+            lines.append(f"- {ref}")
+        lines.append("")
+    lines.append("Consulte sempre um profissional de saude para avaliacao individualizada.")
+    return "\n".join(lines)
 
 
 def apply_theme_settings() -> None:
@@ -1406,6 +1521,10 @@ def main() -> None:
             render_progress_overview(show_details=True, render_bar=False)
 
         render_history()
+        st.markdown("""<script>
+const chat = document.getElementById(\'chat-history\');
+if (chat) { chat.scrollTop = chat.scrollHeight; }
+</script>""", unsafe_allow_html=True)
 
         user_input = st.chat_input("Digite seus sintomas", key="user_input")
         if not user_input and st.session_state.pending_voice_input:
@@ -1430,12 +1549,7 @@ def main() -> None:
                 st.session_state.multimodal_signature = {}
                 st.session_state.pending_voice_input = ""
                 st.session_state.audio_responses = []
-                st.session_state.question_progress = {
-                    "total": 10,
-                    "answered": 0,
-                    "current": 1,
-                    "history": [],
-                }
+                reset_question_progress()
                 st.session_state.printable_summary = ""
                 st.session_state.education_checklist = {}
                 st.session_state.epidemiology_snapshot = {}
@@ -1489,18 +1603,37 @@ def main() -> None:
                 )
 
             if stop_requested:
-                st.session_state.triage_mode = False
+                if st.session_state.triage_mode:
+                    st.session_state.triage_mode = False
+                    reset_question_progress()
             elif start_requested:
-                st.session_state.triage_mode = True
+                if not st.session_state.triage_mode:
+                    st.session_state.triage_mode = True
+                    reset_question_progress()
             elif (
                 not st.session_state.triage_mode
                 and symptom_candidates
                 and any(trigger in normalized_input for trigger in ["dor", "sinto", "tenho", "estou com", "sentindo", "sintomas"])
             ):
                 st.session_state.triage_mode = True
+                reset_question_progress()
 
             if st.session_state.triage_mode and is_direct_query and not start_requested:
                 st.session_state.triage_mode = False
+                reset_question_progress()
+
+            med_key = find_medication_query(user_input)
+            if med_key:
+                st.session_state.triage_mode = False
+                reset_question_progress()
+                med_response = generate_medication_response(med_key)
+                if med_response:
+                    st.session_state.history.append(
+                        f"<div class='message ai-message'><strong>MedIA:</strong> {med_response}</div>"
+                    )
+                    st.session_state.printable_summary = build_symptom_report()
+                    st.rerun()
+                    return
 
             if re.search(r"\bquais?\b.*\bsintoma", normalized_input):
                 summary = summarize_symptom_log(st.session_state.symptom_log)
