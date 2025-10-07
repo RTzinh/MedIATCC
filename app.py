@@ -503,9 +503,13 @@ class ActiveLearningTracker:
         "nao consigo responder",
         "procure um profissional imediatamente",
         "sem dados suficientes",
+        "modelo configurado foi descontinuado",
     )
 
-    def should_flag(self, user_text: str, bot_text: str) -> Optional[Dict[str, str]]:
+    def should_flag(self, user_text: str, bot_text: str, metadata: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, str]]:
+        metadata = metadata or {}
+        if metadata.get("type") == "model_decommissioned":
+            return None
         for pattern in self.FAILURE_PATTERNS:
             if pattern in bot_text.lower():
                 return {
@@ -738,6 +742,14 @@ def render_sidebar() -> None:
     with st.sidebar:
         st.header("Fluxos auxiliares")
 
+        if st.session_state.symptom_log:
+            with st.expander("Resumo rapido de sintomas", expanded=False):
+                st.caption("Sintomas mais recentes registrados automaticamente.")
+                st.write(summarize_symptom_log(st.session_state.symptom_log))
+                if st.button("Limpar sintomas", key="clear_symptoms_sidebar"):
+                    st.session_state.symptom_log = []
+                    st.success("Sintomas resetados para esta sessao.")
+
         exam_files = st.file_uploader(
             "Envie exames estruturados (PDF, CSV, HL7, imagem)",
             type=["pdf", "csv", "hl7", "json", "txt", "png", "jpg", "jpeg"],
@@ -818,11 +830,16 @@ def render_sidebar() -> None:
         st.markdown("---")
         if st.session_state.active_learning_queue:
             with st.expander("Fila de aprendizado ativo", expanded=False):
+                if st.button("Limpar fila", key="clear_active_learning"):
+                    st.session_state.active_learning_queue = []
+                    st.success("Fila de aprendizado esvaziada.")
                 for idx, item in enumerate(st.session_state.active_learning_queue[-5:], 1):
                     st.markdown(f"**Caso {idx}**")
                     st.caption(item["reason"])
                     st.text(f"Pergunta: {item['user']}")
                     st.text(f"Resposta: {item['bot']}")
+        else:
+            st.caption("Sem itens na fila de aprendizado ativo no momento.")
 
         if st.session_state.confidence_history:
             last_conf = st.session_state.confidence_history[-1]
@@ -830,6 +847,10 @@ def render_sidebar() -> None:
                 "Confianca da ultima resposta",
                 f"{last_conf['label']} ({last_conf['score']})",
             )
+            if len(st.session_state.confidence_history) > 3:
+                scope = st.session_state.confidence_history[-3:]
+                average = sum(item["score"] for item in scope) / len(scope)
+                st.caption(f"Media das ultimas respostas: {average:.2f}")
 
         if st.session_state.planner_state:
             st.caption(
@@ -974,6 +995,21 @@ def main() -> None:
             f"<div class='message user-message'><strong>Voce:</strong> {user_input}</div>"
         )
 
+        if user_input.strip().lower() in {"limpar conversa", "reset", "reiniciar"}:
+            st.session_state.history = []
+            st.session_state.memory.clear()
+            st.session_state.symptom_log = []
+            st.session_state.education_recommendations = []
+            st.session_state.medication_alerts = []
+            st.session_state.active_learning_queue = []
+            st.session_state.confidence_history = []
+            st.session_state.planner_state = {}
+            st.session_state.multimodal_signature = {}
+            st.session_state.pending_voice_input = ""
+            st.session_state.audio_responses = []
+            st.success("Conversa e contexto reiniciados.")
+            st.rerun()
+
         lowered_input = user_input.lower()
         symptom_candidates = extract_symptom_candidates(user_input)
         if symptom_candidates:
@@ -1038,8 +1074,10 @@ def main() -> None:
 
         try:
             response = predict_with_fallback(conversation, composed_input)
+            model_error_context = {}
         except BadRequestError as exc:
             error_text = str(exc)
+            model_error_context = {}
             if "model_decommissioned" in error_text:
                 friendly = (
                     "MedIA: o modelo configurado foi descontinuado. "
@@ -1051,12 +1089,16 @@ def main() -> None:
                     "Modelo Groq configurado foi descontinuado. Atualize `GROQ_MODEL_NAME` para um modelo suportado "
                     "(ex.: llama-3.3-70b-versatile ou llama-3.1-8b-instant)."
                 )
+                model_error_context["type"] = "model_decommissioned"
+                model_error_context["detail"] = error_text
             else:
                 friendly = (
                     "MedIA: nao foi possivel gerar uma resposta agora porque o pedido excedeu os limites "
                     "do modelo. Remova alguns anexos ou reduza o texto e tente novamente."
                 )
                 st.error("Falha ao acionar o modelo Groq (BadRequest). Ajuste o contexto e tente de novo.")
+                model_error_context["type"] = "context_limit"
+                model_error_context["detail"] = error_text
             st.session_state.history.append(
                 f"<div class='message ai-message error'><strong>MedIA:</strong> {friendly}</div>"
             )
@@ -1101,7 +1143,11 @@ def main() -> None:
                     seen.add(key)
             st.session_state.education_recommendations = deduped
 
-        flagged = st.session_state.active_learning_tracker.should_flag(user_input, final_response)
+        flagged = st.session_state.active_learning_tracker.should_flag(
+            user_input,
+            final_response,
+            metadata=model_error_context,
+        )
         if flagged:
             st.session_state.active_learning_queue.append(flagged)
 
