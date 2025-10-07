@@ -194,12 +194,13 @@ THEME_STYLES = {
     },
 }
 
-ICON_EMERGENCY = "🚨"
-ICON_EXAM = "🧪"
-ICON_INTERACTION = "💊"
-ICON_WEARABLE = "⌚"
-ICON_EDUCATION = "📘"
-ICON_STEP = "🩺"
+ICON_EMERGENCY = "[URG]"
+ICON_EXAM = "[EXAME]"
+ICON_INTERACTION = "[FARMA]"
+ICON_WEARABLE = "[WEAR]"
+ICON_EDUCATION = "[EDU]"
+ICON_STEP = "[TRIAGEM]"
+ICON_IMAGING = "[IMAGEM]"
 
 
 def ensure_session_defaults() -> None:
@@ -697,39 +698,46 @@ def extract_symptom_candidates(text: str) -> List[str]:
     lowered = text.lower()
     if not any(hint in lowered for hint in SYMPTOM_HINTS):
         return []
-    tokens = re.findall(r"[a-zA-Zà-úÀ-Ú0-9]+", lowered)
+    tokens = re.findall(r"[a-zA-ZÀ-ÖØ-öø-ÿ]+", lowered)
     symptoms: List[str] = []
     for token in tokens:
+        token = token.strip()
         if len(token) < 3:
             continue
         if token in STOPWORDS:
             continue
         if token.isdigit():
             continue
-        symptoms.append(token)
+        if token not in symptoms:
+            symptoms.append(token)
     return symptoms[:12]
 
 
+def get_unique_symptoms(limit: Optional[int] = None) -> List[str]:
+    collected: List[str] = []
+    for entry in st.session_state.symptom_log:
+        for token in entry.get("symptoms", []):
+            if token not in collected:
+                collected.append(token)
+    if limit is not None:
+        return collected[:limit]
+    return collected
+
+
 def summarize_symptom_log(items: List[Dict[str, Any]]) -> str:
-    if not items:
+    tokens = get_unique_symptoms()
+    if not tokens:
         return "Ainda nao registrei sintomas anteriores nesta conversa."
-    collated: List[str] = []
-    for item in items[-10:]:
-        symptoms = item.get("symptoms") or []
-        if symptoms:
-            collated.append(", ".join(symptoms))
-        else:
-            collated.append(item.get("raw", ""))
-    unique = []
-    seen = set()
-    for chunk in collated:
-        if not chunk:
-            continue
-        if chunk in seen:
-            continue
-        seen.add(chunk)
-        unique.append(chunk)
-    return "Sintomas mencionados anteriormente: " + "; ".join(unique)
+    prettified = [token.replace("_", " ").capitalize() for token in tokens]
+    return "Sintomas mencionados anteriormente: " + ", ".join(prettified)
+
+
+def build_symptom_report() -> str:
+    tokens = get_unique_symptoms()
+    if not tokens:
+        return "Sem sintomas registrados no momento."
+    prettified = [token.replace("_", " ").capitalize() for token in tokens]
+    return "Sintomas relatados: " + ", ".join(prettified)
 
 
 def apply_theme_settings() -> None:
@@ -796,6 +804,27 @@ def apply_theme_settings() -> None:
     }}
     .dashboard-tab button[role="tab"] {{
         border-radius: 999px !important;
+    }}
+    div[data-testid="stChatInput"] {{
+        position: fixed;
+        bottom: 18px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(720px, 90vw);
+        background: {palette['panel']};
+        border: 1px solid {palette['accent_soft']};
+        border-radius: 18px;
+        box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
+        z-index: 1010;
+    }}
+    div[data-testid="stChatInput"] textarea {{
+        min-height: 80px !important;
+    }}
+    .stChatMessageContainer {{
+        padding-bottom: 220px !important;
+    }}
+    main .block-container {{
+        padding-bottom: 260px !important;
     }}
     </style>
     """
@@ -882,25 +911,24 @@ def generate_qr_code(content: str) -> Optional[bytes]:
         return None
 
 
+
 def render_patient_dashboard() -> None:
-    st.markdown("### 🗂️ Painel do paciente", unsafe_allow_html=True)
-    tabs = st.tabs(["Sintomas", "Exames", "Alertas", "Emergência"])
+    st.markdown(f"### {ICON_STEP} Painel do paciente", unsafe_allow_html=True)
+    tabs = st.tabs(["Sintomas", "Exames", "Alertas", "Emergencia"])
     with tabs[0]:
-        if st.session_state.symptom_log:
-            for entry in st.session_state.symptom_log[-10:]:
-                st.markdown(
-                    f"- **Sintomas**: {', '.join(entry.get('symptoms', []))} \n"
-                    f"  <small>{entry.get('raw')}</small>",
-                    unsafe_allow_html=True,
-                )
+        tokens = get_unique_symptoms()
+        if tokens:
+            prettified = [token.replace("_", " ").capitalize() for token in tokens]
+            for token in prettified:
+                st.markdown(f"- {token}")
         else:
             st.caption("Nenhum sintoma registrado ainda.")
     with tabs[1]:
         if st.session_state.exam_findings or st.session_state.imaging_findings:
             for item in st.session_state.exam_findings[-5:]:
-                st.markdown(f"- {ICON_EXAM} **{item['name']}**")
+                st.markdown(f"- {ICON_EXAM} {item['name']}")
             for item in st.session_state.imaging_findings[-5:]:
-                st.markdown(f"- 🩻 **{item['name']}**")
+                st.markdown(f"- {ICON_IMAGING} {item['name']}")
         else:
             st.caption("Nenhum exame anexado.")
     with tabs[2]:
@@ -908,7 +936,7 @@ def render_patient_dashboard() -> None:
             for alert in st.session_state.medication_alerts[-5:]:
                 st.markdown(f"- {ICON_INTERACTION} {alert}")
         else:
-            st.caption("Nenhum alerta farmacológico no momento.")
+            st.caption("Nenhum alerta farmacologico no momento.")
     with tabs[3]:
         if st.session_state.critical_events:
             st.markdown(
@@ -916,11 +944,11 @@ def render_patient_dashboard() -> None:
                 unsafe_allow_html=True,
             )
             st.markdown(
-                "[Ligar 192 (SAMU)](tel:192) | [Ligar 190 (Polícia)](tel:190)",
+                "[Ligar 192 (SAMU)](tel:192) | [Ligar 190 (Policia)](tel:190)",
                 unsafe_allow_html=True,
             )
         else:
-            st.caption("Nenhum evento crítico detectado.")
+            st.caption("Nenhum evento critico detectado.")
 
 
 def render_wearable_insights() -> None:
@@ -937,27 +965,31 @@ def render_wearable_insights() -> None:
             st.text(f"{key}: {value}")
 
 
+
 def render_explainability_panel() -> None:
-    st.markdown("#### 🔎 Como cheguei aqui?", unsafe_allow_html=True)
+    st.markdown("#### Detalhes do raciocinio", unsafe_allow_html=True)
     bullets: List[str] = []
     if st.session_state.exam_findings:
         bullets.append(f"{ICON_EXAM} Exames interpretados: {len(st.session_state.exam_findings)}")
     if st.session_state.imaging_findings:
-        bullets.append(f"🩻 Radiografias analisadas: {len(st.session_state.imaging_findings)}")
+        bullets.append(f"{ICON_IMAGING} Imagens analisadas: {len(st.session_state.imaging_findings)}")
     if st.session_state.symptom_log:
-        bullets.append(f"{ICON_STEP} Sintomas chave: {', '.join(st.session_state.symptom_log[-1].get('symptoms', [])[:4])}")
+        tokens = get_unique_symptoms(limit=4)
+        if tokens:
+            bullets.append(f"{ICON_STEP} Sintomas chave: {', '.join(tokens)}")
     if bullets:
         for bullet in bullets:
             st.markdown(f"- {bullet}")
     else:
-        st.caption("Ainda coletando informações para explicabilidade.")
+        st.caption("Ainda coletando informacoes para explicabilidade.")
     if st.session_state.explainability_notes:
-        st.markdown("Notas dos últimos achados de imagem:")
+        st.markdown("Notas de imagem recentes:")
         for note in st.session_state.explainability_notes[-3:]:
             st.markdown(f"- {note}")
 
 
 def render_education_cards() -> None:
+
     if not st.session_state.education_recommendations:
         st.caption("Recomende exames ou descreva sintomas para ativar materiais educativos.")
         return
@@ -1146,24 +1178,25 @@ def render_sidebar() -> None:
 
         st.markdown("---")
         st.subheader("Ficha para imprimir")
-        if st.session_state.printable_summary:
+        summary_text = st.session_state.printable_summary or build_symptom_report()
+        if summary_text and "Sem sintomas registrados" not in summary_text:
             st.text_area(
-                "Resumo mais recente",
-                value=st.session_state.printable_summary,
-                height=160,
+                "Resumo de sintomas",
+                value=summary_text,
+                height=140,
                 disabled=True,
             )
-            qr_bytes = generate_qr_code(st.session_state.printable_summary)
+            qr_bytes = generate_qr_code(summary_text)
             if qr_bytes:
                 st.image(qr_bytes, caption="Compartilhe via QR Code", use_column_width=False)
             st.download_button(
-                "Baixar resumo (.txt)",
-                st.session_state.printable_summary.encode("utf-8"),
-                file_name="medIA_resumo.txt",
+                "Baixar sintomas (.txt)",
+                summary_text.encode("utf-8"),
+                file_name="medIA_sintomas.txt",
                 mime="text/plain",
             )
         else:
-            st.caption("Interaja com o MedIA para gerar um resumo imprimivel.")
+            st.caption("Nenhum sintoma suficiente para gerar resumo imprimivel.")
         st.markdown("---")
         st.subheader("Monitoramento epidemiologico")
         if st.session_state.epidemiology_snapshot:
@@ -1528,7 +1561,7 @@ def main() -> None:
             )
 
             update_question_progress(final_response)
-            st.session_state.printable_summary = final_response
+            st.session_state.printable_summary = build_symptom_report()
 
             if st.session_state.audio_toggle:
                 audio_bytes = generate_tts_audio(final_response)
@@ -1555,9 +1588,9 @@ def main() -> None:
         """
         <style>
             #chat-history {
-                height: calc(100vh - 150px);
+                height: calc(100vh - 260px);
                 overflow-y: auto;
-                padding-bottom: 60px;
+                padding-bottom: 160px;
             }
         </style>
         """,
