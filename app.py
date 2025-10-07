@@ -859,6 +859,10 @@ def render_progress_overview(show_details: bool = False, render_bar: bool = True
     total = data.get("total", 10)
     answered = data.get("answered", 0)
     current = data.get("current", answered + 1)
+    history = data.get("history", [])
+    has_activity = any(entry for entry in history) or answered > 0 or current > 1
+    if not has_activity:
+        return
     if render_bar:
         st.markdown(
             f"#### {ICON_STEP} Progresso da triagem ({answered}/{total})",
@@ -868,7 +872,6 @@ def render_progress_overview(show_details: bool = False, render_bar: bool = True
     if not show_details:
         return
     cols = st.columns(5)
-    history = data.get("history", [])
     for idx in range(total):
         step_number = idx + 1
         col = cols[idx % 5]
@@ -899,8 +902,9 @@ def update_question_progress(response: str) -> None:
     match = re.search(r"pergunt[ao]*\s*(\d+)", lower)
     if match:
         number = int(match.group(1))
-        data["current"] = min(max(number, 1), total)
-        data["answered"] = max(data["answered"], min(number - 1, total))
+        number = min(max(number, 1), total)
+        data["current"] = number
+        data["answered"] = max(data["answered"], min(number, total))
     prompt_snippet = None
     lines = [line.strip() for line in response.splitlines() if line.strip()]
     for line in lines:
@@ -1358,15 +1362,16 @@ def main() -> None:
     )
 
     system_prompt = (
-        "Voce e um especialista em triagem medica digital. "
-        "Siga a rotina de 10 perguntas, numerando uma a uma, e somente entregue diagnostico provavel apos obter todas. "
-        "Use os conteudos de exames estruturados, radiografias e dados de wearables fornecidos no contexto para personalizar a conversa. "
-        "Sempre inclua lista de diagnosticos diferenciais, exames complementares recomendados e orientacoes de cuidado. "
-        "Se o usuario pedir calculo de IMC, execute e aguarde nova solicitacao para retomar o protocolo de perguntas. "
-        "Forneca alertas de medicacao usando o contexto de interacoes. "
-        "Se perguntas sobre sinais e sintomas especificos surgirem, responda diretamente sem bloquear o fluxo. "
+        "Voce e um assistente medico virtual flexivel. Quando o usuario relatar sintomas e desejar suporte clinico, "
+        "ofereca realizar uma triagem estruturada com ate 10 perguntas numeradas, mas permita que ele interrompa ou "
+        "pule etapas a qualquer momento. Nao limite a conversa a triagem: responda imediatamente perguntas diretas "
+        "sobre doencas, sintomas, exames, medicamentos, prevencao ou orientacoes gerais, mesmo durante a triagem. "
+        "Use os conteudos de exames, radiografias e dados de wearables enviados para enriquecer a resposta quando possivel. "
+        "Sempre forneca diagnosticos diferenciais provaveis, exames complementares sugeridos e orientacoes de cuidado, "
+        "indicando quando um especialista humano deve ser consultado. Caso o usuario solicite calculo de IMC ou outras "
+        "informacoes especificas, atenda prontamente e retome a triagem apenas se ele quiser prosseguir. "
         "Quando detectar sinais criticos, priorize orientacao emergencial. "
-        "Inclua recomendacoes sobre buscar especialista humano ao interpretar exames e imagens."
+        "Mantenha o dialogo aberto apos concluir as perguntas, dando continuidade a duvidas ou novas solicitacoes sem forcar reinicio."
     )
 
     prompt = ChatPromptTemplate.from_messages(
