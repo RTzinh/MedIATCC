@@ -82,6 +82,38 @@ STOPWORDS = {
     "por", "sem", "ser", "ter", "vai", "vou", "tem", "dor", "estou", "mais", "menos",
 }
 
+SYMPTOM_HINTS = {
+    "dor",
+    "febre",
+    "vomito",
+    "náusea",
+    "nausea",
+    "ansia",
+    "ansiedade",
+    "calafrio",
+    "calafrios",
+    "tosse",
+    "fadiga",
+    "fraqueza",
+    "tontura",
+    "diarreia",
+    "diarre",
+    "coceira",
+    "mancha",
+    "inchaco",
+    "inchaco",
+    "ardor",
+    "queima",
+    "quente",
+    "frio",
+    "resfriado",
+    "gripado",
+    "sangramento",
+    "dor de cabeça",
+    "cefaléia",
+    "cefaleia",
+}
+
 EDUCATION_LIBRARY = {
     "hipertensao": [
         {
@@ -158,6 +190,7 @@ def ensure_session_defaults() -> None:
         "multimodal_signature": {},
         "confidence_history": [],
         "explainability_notes": [],
+        "symptom_log": [],
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -594,34 +627,57 @@ def truncate_text(value: str, limit: int = 6000) -> str:
 
 
 def predict_with_fallback(conversation: LLMChain, text: str) -> str:
-    limits = [7000, 5000, 3000]
-    windows = [60, 40, 20]
-    memory = st.session_state.memory
-    original_messages = list(getattr(memory.chat_memory, "messages", []))
+    limits = [6000, 4500, 3000]
     last_error: Optional[BadRequestError] = None
-
-    for limit, window in zip(limits, windows):
+    for limit in limits:
         trimmed_text = truncate_text(text, limit=limit)
-        if original_messages:
-            subset = original_messages[-window:] if window else original_messages
-            memory.chat_memory.messages = list(subset)
         try:
-            response = conversation.predict(human_input=trimmed_text)
-            if original_messages:
-                if window and len(original_messages) > window:
-                    memory.chat_memory.messages = list(original_messages[-window:])
-                else:
-                    memory.chat_memory.messages = original_messages
-            return response
+            return conversation.predict(human_input=trimmed_text)
         except BadRequestError as exc:
             last_error = exc
             continue
-
-    if original_messages:
-        memory.chat_memory.messages = original_messages
     if last_error is not None:
         raise last_error
-    raise BadRequestError("Context length exceeded (fallback attempts exhausted).")
+    raise BadRequestError("Falha ao gerar resposta apos tentativas de reducao de contexto.")
+
+
+def extract_symptom_candidates(text: str) -> List[str]:
+    lowered = text.lower()
+    if not any(hint in lowered for hint in SYMPTOM_HINTS):
+        return []
+    tokens = re.findall(r"[a-zA-Zà-úÀ-Ú0-9]+", lowered)
+    symptoms: List[str] = []
+    for token in tokens:
+        if len(token) < 3:
+            continue
+        if token in STOPWORDS:
+            continue
+        if token.isdigit():
+            continue
+        symptoms.append(token)
+    return symptoms[:12]
+
+
+def summarize_symptom_log(items: List[Dict[str, Any]]) -> str:
+    if not items:
+        return "Ainda nao registrei sintomas anteriores nesta conversa."
+    collated: List[str] = []
+    for item in items[-10:]:
+        symptoms = item.get("symptoms") or []
+        if symptoms:
+            collated.append(", ".join(symptoms))
+        else:
+            collated.append(item.get("raw", ""))
+    unique = []
+    seen = set()
+    for chunk in collated:
+        if not chunk:
+            continue
+        if chunk in seen:
+            continue
+        seen.add(chunk)
+        unique.append(chunk)
+    return "Sintomas mencionados anteriormente: " + "; ".join(unique)
 
 
 def build_context_sections() -> (str, Dict[str, Any]):
@@ -917,6 +973,25 @@ def main() -> None:
         st.session_state.history.append(
             f"<div class='message user-message'><strong>Voce:</strong> {user_input}</div>"
         )
+
+        lowered_input = user_input.lower()
+        symptom_candidates = extract_symptom_candidates(user_input)
+        if symptom_candidates:
+            st.session_state.symptom_log.append(
+                {"raw": user_input, "symptoms": symptom_candidates}
+            )
+
+        if re.search(r"\bquais?\b.*\bsintoma", lowered_input):
+            summary = summarize_symptom_log(st.session_state.symptom_log)
+            response_text = (
+                summary
+                + "\n\nSempre consulte um profissional de saude para interpretacao completa."
+            )
+            st.session_state.history.append(
+                f"<div class='message ai-message'><strong>MedIA:</strong> {response_text}</div>"
+            )
+            st.rerun()
+            return
 
         st.session_state.epidemiology_monitor.ingest(user_input)
         st.session_state.epidemiology_snapshot = st.session_state.epidemiology_monitor.export()
