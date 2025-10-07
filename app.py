@@ -137,7 +137,7 @@ EDUCATION_LIBRARY = {
 def ensure_session_defaults() -> None:
     defaults = {
         "memory": ConversationBufferWindowMemory(
-            k=50_000, memory_key="chat_history", return_messages=True
+            k=60, memory_key="chat_history", return_messages=True
         ),
         "history": [],
         "exam_findings": [],
@@ -593,6 +593,37 @@ def truncate_text(value: str, limit: int = 6000) -> str:
     )
 
 
+def predict_with_fallback(conversation: LLMChain, text: str) -> str:
+    limits = [7000, 5000, 3000]
+    windows = [60, 40, 20]
+    memory = st.session_state.memory
+    original_messages = list(getattr(memory.chat_memory, "messages", []))
+    last_error: Optional[BadRequestError] = None
+
+    for limit, window in zip(limits, windows):
+        trimmed_text = truncate_text(text, limit=limit)
+        if original_messages:
+            subset = original_messages[-window:] if window else original_messages
+            memory.chat_memory.messages = list(subset)
+        try:
+            response = conversation.predict(human_input=trimmed_text)
+            if original_messages:
+                if window and len(original_messages) > window:
+                    memory.chat_memory.messages = list(original_messages[-window:])
+                else:
+                    memory.chat_memory.messages = original_messages
+            return response
+        except BadRequestError as exc:
+            last_error = exc
+            continue
+
+    if original_messages:
+        memory.chat_memory.messages = original_messages
+    if last_error is not None:
+        raise last_error
+    raise BadRequestError("Context length exceeded (fallback attempts exhausted).")
+
+
 def build_context_sections() -> (str, Dict[str, Any]):
     exam_context = st.session_state.exam_pipeline.render_for_prompt(st.session_state.exam_findings)
     imaging_context = st.session_state.radiography_service.render_for_prompt(
@@ -622,7 +653,7 @@ def build_context_sections() -> (str, Dict[str, Any]):
             + fusion_data["summary"]
             + f" Vetor={fusion_data.get('vector')}"
         )
-    context_payload = truncate_text("\n\n".join(pieces), limit=5000)
+    context_payload = truncate_text("\n\n".join(pieces), limit=4000)
     context_meta = {
         "critical_flags": st.session_state.critical_events,
         "medication_alerts": medication_alerts,
@@ -914,10 +945,9 @@ def main() -> None:
         composed_input = user_input
         if context_payload:
             composed_input = f"{context_payload}\n\nEntrada do paciente: {user_input}"
-        composed_input = truncate_text(composed_input, limit=7000)
 
         try:
-            response = conversation.predict(human_input=composed_input)
+            response = predict_with_fallback(conversation, composed_input)
         except BadRequestError as exc:
             friendly = (
                 "MedIA: nao foi possivel gerar uma resposta agora porque o pedido excedeu os limites "
