@@ -1378,11 +1378,9 @@ def main() -> None:
     )
 
     with triage_tab:
-        st.markdown("<div class='themed-panel'>", unsafe_allow_html=True)
         render_progress_overview(show_details=False, render_bar=True)
         with st.expander("Ver detalhes das perguntas", expanded=False):
             render_progress_overview(show_details=True, render_bar=False)
-        st.markdown("</div>", unsafe_allow_html=True)
 
         render_history()
 
