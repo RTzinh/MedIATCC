@@ -855,11 +855,22 @@ def main() -> None:
     render_sidebar()
 
     groq_api_key = st.secrets["GROQ_API_KEY"]
-    default_model = "llama3-70b-8192"
+    default_model = "llama-3.3-70b-versatile"
+    model_aliases = {
+        "llama3-8b-8192": "llama-3.1-8b-instant",
+        "llama3-70b-8192": "llama-3.3-70b-versatile",
+    }
     model = os.environ.get("GROQ_MODEL_NAME", "")
     if not model and "GROQ_MODEL_NAME" in st.secrets:
         model = st.secrets["GROQ_MODEL_NAME"]
-    model = model or default_model
+    original_model = model or default_model
+    resolved_model = model_aliases.get(original_model, original_model)
+    if resolved_model != original_model:
+        st.warning(
+            f"Modelo '{original_model}' foi substituido automaticamente por '{resolved_model}'. "
+            "Atualize GROQ_MODEL_NAME para evitar esta mensagem."
+        )
+    model = resolved_model
     groq_chat = ChatGroq(groq_api_key=groq_api_key, model_name=model)
 
     st.title("MedIA")
@@ -957,10 +968,13 @@ def main() -> None:
             if "model_decommissioned" in error_text:
                 friendly = (
                     "MedIA: o modelo configurado foi descontinuado. "
-                    "Defina um novo modelo ativo como `llama3-70b-8192` ou outro disponivel e tente novamente."
+                    "Defina `GROQ_MODEL_NAME` para um modelo suportado como "
+                    "`llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, ou outro da lista atual da Groq "
+                    "e tente novamente."
                 )
                 st.error(
-                    "Modelo Groq configurado foi descontinuado. Atualize `GROQ_MODEL_NAME` para um modelo suportado."
+                    "Modelo Groq configurado foi descontinuado. Atualize `GROQ_MODEL_NAME` para um modelo suportado "
+                    "(ex.: llama-3.3-70b-versatile ou llama-3.1-8b-instant)."
                 )
             else:
                 friendly = (
