@@ -58,6 +58,15 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - defensive fallback
     AdvancedLabInterpreter = DICOMAnalyzer = MultiexamReasoner = ECGInterpreter = GuidelineAdvisor = None  # type: ignore
 
+try:
+    from integrations import get_lab_pipeline, get_cad_handler
+except ModuleNotFoundError:  # pragma: no cover - optional integrations
+    def get_lab_pipeline() -> Optional[Any]:
+        return None
+
+    def get_cad_handler() -> Optional[Any]:
+        return None
+
 def safe_show_image(image: Any, caption: Optional[str] = None, **kwargs: Any) -> None:
     """Wrapper to avoid Streamlit media cache errors when the file is missing."""
     if image is None:
@@ -129,6 +138,29 @@ def default_cad_handler(
         "hash": metadata.get("hash"),
         "extras": {"handler": "default_stub"},
     }
+
+
+def register_external_services() -> None:
+    """Configure CAD/HL7 integrations, preferindo handlers externos quando presentes."""
+    lab_engine = st.session_state.get("lab_interpreter")
+    if lab_engine:
+        custom_pipeline = get_lab_pipeline()
+        if custom_pipeline:
+            lab_engine.register_external_pipeline(custom_pipeline)
+            st.session_state.lab_pipeline_registered = True
+        elif not st.session_state.get("lab_pipeline_registered"):
+            lab_engine.register_external_pipeline(default_hl7_pipeline)
+            st.session_state.lab_pipeline_registered = True
+
+    cad_engine = st.session_state.get("dicom_analyzer")
+    if cad_engine:
+        custom_handler = get_cad_handler()
+        if custom_handler:
+            cad_engine.register_external_handler(custom_handler)
+            st.session_state.cad_handler_registered = True
+        elif not st.session_state.get("cad_handler_registered"):
+            cad_engine.register_external_handler(default_cad_handler)
+            st.session_state.cad_handler_registered = True
 
 
 CLINICAL_DISCLAIMER = (
@@ -461,20 +493,6 @@ def ensure_session_defaults() -> None:
         st.session_state.ecg_interpreter = ECGInterpreter()
     if "guideline_advisor" not in st.session_state and GuidelineAdvisor:
         st.session_state.guideline_advisor = GuidelineAdvisor()
-    if (
-        st.session_state.get("lab_interpreter")
-        and not st.session_state.get("lab_pipeline_registered")
-        and AdvancedLabInterpreter
-    ):
-        st.session_state.lab_interpreter.register_external_pipeline(default_hl7_pipeline)
-        st.session_state.lab_pipeline_registered = True
-    if (
-        st.session_state.get("dicom_analyzer")
-        and not st.session_state.get("cad_handler_registered")
-        and DICOMAnalyzer
-    ):
-        st.session_state.dicom_analyzer.register_external_handler(default_cad_handler)
-        st.session_state.cad_handler_registered = True
 
 
 class ExamPipeline:
@@ -1667,6 +1685,7 @@ def render_sidebar() -> None:
             current_history = demographics.get("history")
             if not isinstance(current_history, dict):
                 current_history = {}
+
             age_default = demographics.get("age")
             age_input = st.number_input(
                 "Idade (anos)",
@@ -1675,18 +1694,55 @@ def render_sidebar() -> None:
                 value=int(age_default) if isinstance(age_default, (int, float)) and age_default > 0 else 0,
                 step=1,
             )
+
             sex_options = ["Selecione", "F", "M", "Outro"]
             current_sex = demographics.get("sex")
             sex_index = sex_options.index(current_sex) if current_sex in sex_options else 0
             sex_input = st.selectbox("Sexo", options=sex_options, index=sex_index)
 
-            st.caption("Condições clínicas relevantes")
+            weight_default = demographics.get("weight_kg") or 0.0
+            height_default = demographics.get("height_cm") or 0.0
+            weight_input = st.number_input(
+                "Peso (kg)",
+                min_value=0.0,
+                max_value=400.0,
+                value=float(weight_default),
+                step=0.5,
+                format="%.1f",
+            )
+            height_input = st.number_input(
+                "Altura (cm)",
+                min_value=0.0,
+                max_value=250.0,
+                value=float(height_default),
+                step=0.5,
+                format="%.1f",
+            )
+            bmi_value: Optional[float] = None
+            if weight_input > 0 and height_input > 0:
+                bmi_value = weight_input / ((height_input / 100) ** 2)
+                st.caption(f"IMC calculado: {bmi_value:.1f}")
+
+            pregnancy_status = demographics.get("pregnancy_status")
+            if sex_input == "F":
+                pregnancy_options = ["Nao", "Primeiro trimestre", "Segundo trimestre", "Terceiro trimestre"]
+                pregnancy_index = pregnancy_options.index(pregnancy_status) if pregnancy_status in pregnancy_options else 0
+                pregnancy_status = st.selectbox("Gestacao atual", options=pregnancy_options, index=pregnancy_index)
+            else:
+                pregnancy_status = None
+
+            smoking_options = ["Nao fumante", "Ex-fumante", "Fumante atual"]
+            current_smoke = demographics.get("smoking_status")
+            smoke_index = smoking_options.index(current_smoke) if current_smoke in smoking_options else 0
+            smoking_status = st.selectbox("Tabagismo", options=smoking_options, index=smoke_index)
+
+            st.caption("Condicoes clinicas relevantes")
             history_labels = {
-                "congestive_heart_failure": "Insuficiência cardíaca",
-                "hypertension": "Hipertensão",
-                "stroke_tia": "AVE/AIT prévio",
+                "congestive_heart_failure": "Insuficiencia cardiaca",
+                "hypertension": "Hipertensao",
+                "stroke_tia": "AVE/AIT previo",
                 "diabetes": "Diabetes",
-                "vascular_disease": "Doença vascular",
+                "vascular_disease": "Doenca vascular",
             }
             updated_history: Dict[str, bool] = {}
             for key, label in history_labels.items():
@@ -1696,49 +1752,83 @@ def render_sidebar() -> None:
                     key=f"history_{key}",
                 )
 
-            st.caption("Pressão arterial (opcional)")
+            st.caption("Pressao arterial (opcional)")
             blood_pressure = demographics.get("blood_pressure")
             if not isinstance(blood_pressure, dict):
                 blood_pressure = {}
             systolic_input = st.number_input(
-                "Pressão sistólica",
+                "Pressao sistolica",
                 min_value=0,
                 max_value=250,
                 value=int(blood_pressure.get("systolic", 0) or 0),
                 step=1,
             )
             diastolic_input = st.number_input(
-                "Pressão diastólica",
+                "Pressao diastolica",
                 min_value=0,
                 max_value=160,
                 value=int(blood_pressure.get("diastolic", 0) or 0),
                 step=1,
             )
+
             notes_input = st.text_area(
-                "Outras informações clínicas (opcional)",
+                "Outras informacoes clinicas (opcional)",
                 value=str(demographics.get("notes") or ""),
                 height=80,
             )
 
-            processed_demo = {key: value for key, value in demographics.items() if key not in {"age", "sex", "history", "blood_pressure", "notes"}}
+            processed_demo = {
+                key: value
+                for key, value in demographics.items()
+                if key
+                not in {
+                    "age",
+                    "sex",
+                    "history",
+                    "blood_pressure",
+                    "notes",
+                    "weight_kg",
+                    "height_cm",
+                    "bmi",
+                    "pregnancy_status",
+                    "smoking_status",
+                }
+            }
             processed_demo["history"] = updated_history
             processed_demo["notes"] = notes_input.strip() or None
             processed_demo["age"] = int(age_input) if age_input > 0 else None
             processed_demo["sex"] = sex_input if sex_input != "Selecione" else None
+            processed_demo["weight_kg"] = round(weight_input, 1) if weight_input > 0 else None
+            processed_demo["height_cm"] = round(height_input, 1) if height_input > 0 else None
+            processed_demo["smoking_status"] = smoking_status
+            if pregnancy_status and pregnancy_status != "Nao":
+                processed_demo["pregnancy_status"] = pregnancy_status
+            else:
+                processed_demo.pop("pregnancy_status", None)
+            if bmi_value:
+                processed_demo["bmi"] = round(bmi_value, 1)
+            else:
+                processed_demo.pop("bmi", None)
+
             if systolic_input > 0 and diastolic_input > 0:
                 processed_demo["blood_pressure"] = {
                     "systolic": int(systolic_input),
                     "diastolic": int(diastolic_input),
                 }
-            elif "blood_pressure" in processed_demo:
-                processed_demo.pop("blood_pressure")
+            else:
+                processed_demo.pop("blood_pressure", None)
+
             if not processed_demo["notes"]:
                 processed_demo.pop("notes", None)
+            if not processed_demo["weight_kg"]:
+                processed_demo.pop("weight_kg", None)
+            if not processed_demo["height_cm"]:
+                processed_demo.pop("height_cm", None)
 
             if processed_demo != demographics:
                 st.session_state.demographics = processed_demo
                 refresh_multiexam_reasoning()
-                st.success("Dados demográficos atualizados.")
+                st.success("Dados demograficos atualizados.")
 
         if st.session_state.symptom_log:
             with st.expander("Resumo rapido de sintomas", expanded=False):
@@ -1985,6 +2075,7 @@ def main() -> None:
         return
 
     ensure_session_defaults()
+    register_external_services()
     apply_theme_settings()
     render_sidebar()
 
