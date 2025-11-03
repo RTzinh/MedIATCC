@@ -5,9 +5,16 @@ import os
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 import streamlit as st
+if TYPE_CHECKING:
+    from langchain.chains import LLMChain
+    from langchain.chains.conversation.memory import ConversationBufferWindowMemory
+    from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder
+    from langchain.schema import SystemMessage
+    from langchain_groq import ChatGroq
+
 try:
     from groq import BadRequestError
 except ModuleNotFoundError as exc:
@@ -27,10 +34,9 @@ try:
 except ModuleNotFoundError as exc:
     LANGCHAIN_AVAILABLE = False
     LANGCHAIN_IMPORT_ERROR = exc
-    class LLMChain:  # type: ignore
-        ...
-    ConversationBufferWindowMemory = object  # type: ignore
-    ChatPromptTemplate = HumanMessagePromptTemplate = MessagesPlaceholder = SystemMessage = ChatGroq = object  # type: ignore*** End Patch
+    LLMChain = Any  # type: ignore
+    ConversationBufferWindowMemory = Any  # type: ignore
+    ChatPromptTemplate = HumanMessagePromptTemplate = MessagesPlaceholder = SystemMessage = ChatGroq = Any  # type: ignore
 
 try:
     import PyPDF2  # type: ignore
@@ -411,7 +417,7 @@ class ExamPipeline:
                 lines.append(f"Notas: {'; '.join(item['notes'])}")
         return "\n".join(lines)
 
-    def _extract_content(self, content: bytes, ext: str) -> (str, List[str]):
+    def _extract_content(self, content: bytes, ext: str) -> tuple[str, List[str]]:
         notes: List[str] = []
         text = ""
         if ext == ".csv":
@@ -516,7 +522,7 @@ class RadiographyService:
                 sections.append(f"Notas: {'; '.join(item['notes'])}")
         return "\n".join(sections)
 
-    def _call_service(self, content: bytes, mime: Optional[str]) -> (Dict[str, Any], List[str]):
+    def _call_service(self, content: bytes, mime: Optional[str]) -> tuple[Dict[str, Any], List[str]]:
         notes: List[str] = []
         if self.base_url and requests:
             try:
@@ -1261,7 +1267,7 @@ def render_education_cards() -> None:
     st.session_state.education_checklist = checklist
 
 
-def build_context_sections() -> (str, Dict[str, Any]):
+def build_context_sections() -> tuple[str, Dict[str, Any]]:
     exam_context = st.session_state.exam_pipeline.render_for_prompt(st.session_state.exam_findings)
     imaging_context = st.session_state.radiography_service.render_for_prompt(
         st.session_state.imaging_findings
@@ -1431,7 +1437,7 @@ def render_sidebar() -> None:
         if selected_category != "Selecione":
             for rec in EDUCATION_LIBRARY[selected_category]:
                 st.markdown(
-                    f"* `{selected_category}` -> **{rec['title']}** ({rec['type']})"
+                    f"* `{selected_category}` -> **{rec["title"]}** ({rec["type"]})"
                 )
 
         st.markdown("---")
