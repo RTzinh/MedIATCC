@@ -27,8 +27,9 @@ class LabAlert:
 class AdvancedLabInterpreter:
     """Parse structured lab payloads and surface longitudinal insights."""
 
-    def __init__(self) -> None:
+    def __init__(self, external_pipeline: Optional[Any] = None) -> None:
         self._history: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        self._external_pipeline = external_pipeline
 
     def ingest_exam(
         self,
@@ -82,12 +83,33 @@ class AdvancedLabInterpreter:
         if demographics:
             demographics_note = f"Perfil aplicado: {demographics}."
 
+        external_findings: Optional[Dict[str, Any]] = None
+        if self._external_pipeline:
+            try:
+                external_findings = self._external_pipeline(
+                    exam=exam,
+                    normalized=normalized,
+                    alerts=[alert.__dict__ for alert in alerts],
+                    demographics=demographics or {},
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                alerts.append(
+                    LabAlert(
+                        marker="pipeline_externo",
+                        value=0.0,
+                        reference=(0.0, 0.0),
+                        severity="moderado",
+                        rationale=f"Falha ao acionar pipeline externo: {exc}",
+                    )
+                )
+
         return {
             "panel": panel,
             "exam_id": exam_id,
             "alerts": [alert.__dict__ for alert in alerts],
             "trend_summary": trend_summary,
             "demographics_note": demographics_note,
+            "external": external_findings,
         }
 
     def _build_alerts(
@@ -174,3 +196,7 @@ class AdvancedLabInterpreter:
 
     def reset(self) -> None:
         self._history.clear()
+
+    def register_external_pipeline(self, pipeline: Any) -> None:
+        """Allow callers to plug a custom HL7/FHIR processing pipeline."""
+        self._external_pipeline = pipeline

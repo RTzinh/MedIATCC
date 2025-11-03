@@ -346,7 +346,15 @@ def ensure_session_defaults() -> None:
         "guideline_plan": [],
         "guideline_cha2ds2": None,
         "guideline_curb65": None,
-        "demographics": {},
+        "demographics": {
+            "age": 68,
+            "sex": "F",
+            "history": {
+                "hypertension": True,
+                "diabetes": False,
+            },
+            "blood_pressure": {"systolic": 110, "diastolic": 65},
+        },
         "question_progress": {
             "total": 10,
             "answered": 0,

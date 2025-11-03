@@ -23,8 +23,9 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
 class DICOMAnalyzer:
     """Inspect DICOM payloads and surface structured findings."""
 
-    def __init__(self) -> None:
+    def __init__(self, external_handler: Optional[Any] = None) -> None:
         self._cache: Dict[str, Dict[str, Any]] = {}
+        self._external_handler = external_handler
 
     def analyze_bytes(self, *, file_id: str, content: bytes) -> Dict[str, Any]:
         if file_id in self._cache:
@@ -62,8 +63,28 @@ class DICOMAnalyzer:
             "frames": frames,
             "hash": digest[:16],
         }
+        if self._external_handler:
+            try:
+                external_payload = self._external_handler(
+                    file_id=file_id,
+                    content=content,
+                    metadata=dict(payload),
+                )
+                if isinstance(external_payload, dict):
+                    payload.update(
+                        {
+                            key: external_payload.get(key, payload.get(key))
+                            for key in ["meta_summary", "cad_flags", "frames", "hash", "extras"]
+                        }
+                    )
+            except Exception as exc:  # pragma: no cover - defensive
+                payload.setdefault("cad_flags", []).append(f"Serviço externo falhou: {exc}")
         self._cache[file_id] = payload
         return payload
+
+    def register_external_handler(self, handler: Any) -> None:
+        """Allow callers to plug an external CAD pipeline."""
+        self._external_handler = handler
 
     def _is_zip(self, content: bytes) -> bool:
         return content[:2] == b"PK"

@@ -6,3 +6,5 @@ pytesseract>=0.3.10
 requests>=2.31.0
 gTTS>=2.5.0
 qrcode[pil]>=7.4
+pydicom>=2.4.0
+pyedflib>=0.1.36
