@@ -69,6 +69,19 @@ except ImportError:  # pragma: no cover
     qrcode = None
 
 
+def safe_show_image(image: Any, caption: Optional[str] = None, **kwargs: Any) -> None:
+    """Wrapper to avoid Streamlit media cache errors when the file is missing."""
+    if image is None:
+        return
+    if isinstance(image, str) and not os.path.exists(image):
+        st.warning("Imagem não está mais disponível nesta sessão.")
+        return
+    try:
+        st.image(image, caption=caption, **kwargs)
+    except Exception as exc:  # pragma: no cover - defensive fallback
+        st.warning(f"Não foi possível exibir a imagem: {exc}")
+
+
 CLINICAL_DISCLAIMER = (
     "Aviso: interpretacoes automatizadas complementam o parecer medico humano e nao substituem atendimento presencial."
 )
@@ -1496,7 +1509,7 @@ def render_sidebar() -> None:
             )
             qr_bytes = generate_qr_code(summary_text)
             if qr_bytes:
-                st.image(qr_bytes, caption="Compartilhe via QR Code", use_column_width=False)
+                safe_show_image(qr_bytes, caption="Compartilhe via QR Code", use_column_width=False)
             st.download_button(
                 "Baixar sintomas (.txt)",
                 summary_text.encode("utf-8"),
