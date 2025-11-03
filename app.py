@@ -47,6 +47,16 @@ try:
 except ImportError:  # pragma: no cover
     qrcode = None
 
+try:
+    from med_modules import (
+        AdvancedLabInterpreter,
+        DICOMAnalyzer,
+        MultiexamReasoner,
+        ECGInterpreter,
+        GuidelineAdvisor,
+    )
+except ModuleNotFoundError:  # pragma: no cover - defensive fallback
+    AdvancedLabInterpreter = DICOMAnalyzer = MultiexamReasoner = ECGInterpreter = GuidelineAdvisor = None  # type: ignore
 
 def safe_show_image(image: Any, caption: Optional[str] = None, **kwargs: Any) -> None:
     """Wrapper to avoid Streamlit media cache errors when the file is missing."""
@@ -324,6 +334,19 @@ def ensure_session_defaults() -> None:
         "symptom_log": [],
         "theme": "Claro",
         "font_scale": 1.0,
+        "advanced_lab_findings": [],
+        "advanced_lab_ids": set(),
+        "dicom_findings": [],
+        "dicom_ids": set(),
+        "cross_validation_notes": [],
+        "cross_conflicts": [],
+        "ecg_insights": [],
+        "ecg_ids": set(),
+        "guideline_recommendations": [],
+        "guideline_plan": [],
+        "guideline_cha2ds2": None,
+        "guideline_curb65": None,
+        "demographics": {},
         "question_progress": {
             "total": 10,
             "answered": 0,
@@ -366,6 +389,16 @@ def ensure_session_defaults() -> None:
         st.session_state.conversation_planner = ConversationPlanner()
     if "explainability_engine" not in st.session_state:
         st.session_state.explainability_engine = ExplainabilityEngine()
+    if "lab_interpreter" not in st.session_state and AdvancedLabInterpreter:
+        st.session_state.lab_interpreter = AdvancedLabInterpreter()
+    if "dicom_analyzer" not in st.session_state and DICOMAnalyzer:
+        st.session_state.dicom_analyzer = DICOMAnalyzer()
+    if "cross_reasoner" not in st.session_state and MultiexamReasoner:
+        st.session_state.cross_reasoner = MultiexamReasoner()
+    if "ecg_interpreter" not in st.session_state and ECGInterpreter:
+        st.session_state.ecg_interpreter = ECGInterpreter()
+    if "guideline_advisor" not in st.session_state and GuidelineAdvisor:
+        st.session_state.guideline_advisor = GuidelineAdvisor()
 
 
 class ExamPipeline:
@@ -388,6 +421,9 @@ class ExamPipeline:
             "notes": notes,
             "raw_text": raw_text[:5000],
             "normalized": normalized,
+            "binary_preview": content[:200000]
+            if ext in {".edf", ".hl7", ".zip", ".dcm"}
+            else b"",
         }
         self._cache[file_id] = result
         return result
@@ -1134,49 +1170,6 @@ def apply_theme_settings() -> None:
     st.markdown(css, unsafe_allow_html=True)
 
 
-def render_progress_overview(show_details: bool = False, render_bar: bool = True) -> None:
-    if not st.session_state.get("triage_mode", False):
-        return
-    data = st.session_state.question_progress
-    total = data.get("total", 10)
-    answered = data.get("answered", 0)
-    current = data.get("current", answered + 1)
-    history = data.get("history", [])
-    has_activity = any(entry for entry in history) or answered > 0 or current > 1
-    if not has_activity:
-        return
-    if render_bar:
-        st.markdown(
-            f"#### {ICON_STEP} Progresso da triagem ({answered}/{total})",
-            unsafe_allow_html=True,
-        )
-        st.progress(min(answered / total if total else 0, 1.0))
-    if not show_details:
-        return
-    cols = st.columns(5)
-    for idx in range(total):
-        step_number = idx + 1
-        col = cols[idx % 5]
-        status_class = ""
-        badge = "Concluida" if step_number <= answered else (
-            "Atual" if step_number == current else "Pendente"
-        )
-        if step_number > answered + 1:
-            status_class = " inactive"
-        snippet = history[idx] if idx < len(history) else "Aguardando pergunta."
-        with col:
-            st.markdown(
-                f"""
-                <div class="step-card{status_class}">
-                    <div class="badge-accent">Pergunta {step_number}</div>
-                    <p style="margin-top:6px;">{snippet}</p>
-                    <small>{badge}</small>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-
 def update_question_progress(response: str) -> None:
     if not st.session_state.get("triage_mode", False):
         return
@@ -1321,6 +1314,134 @@ def render_education_cards() -> None:
     st.session_state.education_checklist = checklist
 
 
+def refresh_multiexam_reasoning() -> None:
+    reasoner = st.session_state.get("cross_reasoner")
+    labs = st.session_state.get("advanced_lab_findings", [])
+    imaging = st.session_state.get("dicom_findings", [])
+    wearable_snapshot = st.session_state.get("wearable_payload", {})
+    if reasoner:
+        outcome = reasoner.synthesize(
+            lab_alerts=labs,
+            imaging_alerts=imaging,
+            wearable_snapshot=wearable_snapshot if isinstance(wearable_snapshot, dict) else {},
+        )
+        st.session_state.cross_validation_notes = outcome.get("notes", [])
+        st.session_state.cross_conflicts = outcome.get("conflicts", [])
+    advisor = st.session_state.get("guideline_advisor")
+    if advisor:
+        has_high_risk_lab = any(
+            any(sub.get("severity") == "alto" for sub in entry.get("alerts", []))
+            for entry in labs
+            if isinstance(entry, dict)
+        )
+        imaging_flags = any(
+            bool(entry.get("cad_flags"))
+            for entry in imaging
+            if isinstance(entry, dict)
+        )
+        ecg_flags = any(
+            "falha" in (insight.get("summary", "").lower())
+            for insight in st.session_state.get("ecg_insights", [])
+            if isinstance(insight, dict)
+        )
+        plan_payload = advisor.suggest_next_steps(
+            has_high_risk_lab=has_high_risk_lab,
+            imaging_flags=imaging_flags,
+            ecg_red_flags=ecg_flags,
+        )
+        st.session_state.guideline_plan = plan_payload.get("plan", [])
+        demographics = st.session_state.get("demographics", {})
+        history = {}
+        if isinstance(demographics, dict):
+            history = demographics.get("history") or {}
+            if not isinstance(history, dict):
+                history = {}
+            st.session_state.guideline_cha2ds2 = advisor.cha2ds2_vasc(
+                age=demographics.get("age"),
+                sex=demographics.get("sex"),
+                history=history,
+            )
+            wearable_rr = wearable_snapshot.get("respiratory_rate")
+            labs_payload = demographics.get("labs") if isinstance(demographics.get("labs"), dict) else {}
+            st.session_state.guideline_curb65 = advisor.curb65(
+                age=demographics.get("age"),
+                confusion=bool(demographics.get("confusion")),
+                urea=labs_payload.get("urea") if isinstance(labs_payload, dict) else None,
+                respiratory_rate=int(wearable_rr) if isinstance(wearable_rr, (int, float)) else None,
+                blood_pressure=demographics.get("blood_pressure")
+                if isinstance(demographics.get("blood_pressure"), dict)
+                else None,
+            )
+
+
+def render_advanced_insights() -> None:
+    st.markdown("#### Insights laboratoriais avancados", unsafe_allow_html=True)
+    labs = st.session_state.get("advanced_lab_findings", [])
+    if labs:
+        for entry in labs[-3:]:
+            alerts = entry.get("alerts", [])
+            alert_text = ", ".join(
+                f"{item.get('marker')} ({item.get('severity')})"
+                for item in alerts
+                if isinstance(item, dict)
+            )
+            trend = "; ".join(entry.get("trend_summary", []) or [])
+            line = f"{entry.get('panel')}: {alert_text}" if alert_text else entry.get("panel")
+            st.markdown(f"- {line}")
+            if trend:
+                st.caption(trend)
+    else:
+        st.caption("Sem flags laboratoriais avancados no momento.")
+
+    st.markdown("#### CAD e metadados de DICOM", unsafe_allow_html=True)
+    dicom_items = st.session_state.get("dicom_findings", [])
+    if dicom_items:
+        for record in dicom_items[-3:]:
+            meta = "; ".join(record.get("meta_summary", []) or [])
+            cad_flags = "; ".join(record.get("cad_flags", []) or [])
+            st.markdown(f"- {record.get('id')}: {meta or 'Sem metadados'}")
+            if cad_flags:
+                st.caption(cad_flags)
+    else:
+        st.caption("Nenhum estudo DICOM detalhado registrado.")
+
+    st.markdown("#### Correlacao multiexames", unsafe_allow_html=True)
+    cross_notes = st.session_state.get("cross_validation_notes", [])
+    cross_conflicts = st.session_state.get("cross_conflicts", [])
+    if cross_notes:
+        for note in cross_notes[-5:]:
+            st.markdown(f"- {note}")
+    else:
+        st.caption("Sem notas combinadas ate o momento.")
+    if cross_conflicts:
+        st.warning("Conflitos detectados: " + " | ".join(cross_conflicts))
+
+    st.markdown("#### ECG / sinais vitais", unsafe_allow_html=True)
+    ecg_insights = st.session_state.get("ecg_insights", [])
+    if ecg_insights:
+        for insight in ecg_insights[-3:]:
+            st.markdown(f"- {insight.get('summary', 'Sem resumo')}")
+    else:
+        st.caption("Nenhuma analise de ECG processada.")
+
+    st.markdown("#### Diretrizes clinicas sugeridas", unsafe_allow_html=True)
+    plan = st.session_state.get("guideline_plan", [])
+    if plan:
+        for step in plan:
+            st.markdown(f"- {step}")
+    else:
+        st.caption("Sem alertas de diretrizes no momento.")
+    cha2ds2 = st.session_state.get("guideline_cha2ds2")
+    if isinstance(cha2ds2, dict):
+        st.caption(
+            f"CHA2DS2-VASc: {cha2ds2.get('score')} pontos ({', '.join(cha2ds2.get('factors', []))}) - "
+            f"{cha2ds2.get('recommendation')}"
+        )
+    curb65 = st.session_state.get("guideline_curb65")
+    if isinstance(curb65, dict):
+        st.caption(f"CURB-65: {curb65.get('score')} - {curb65.get('recommendation')}")
+
+
 def build_context_sections() -> tuple[str, Dict[str, Any]]:
     exam_context = st.session_state.exam_pipeline.render_for_prompt(st.session_state.exam_findings)
     imaging_context = st.session_state.radiography_service.render_for_prompt(
@@ -1345,6 +1466,46 @@ def build_context_sections() -> tuple[str, Dict[str, Any]]:
         pieces.append(wearable_context)
     if medication_alerts:
         pieces.append("Alertas farmacologicos ativos: " + "; ".join(sorted(set(medication_alerts))))
+    advanced_labs = st.session_state.get("advanced_lab_findings", [])
+    if advanced_labs:
+        lab_lines = []
+        for entry in advanced_labs[-3:]:
+            alerts = entry.get("alerts", [])
+            markers = ", ".join(
+                f"{item.get('marker')}({item.get('severity')})"
+                for item in alerts
+                if isinstance(item, dict)
+            )
+            summary = entry.get("panel")
+            if markers:
+                summary = f"{summary}: {markers}"
+            if entry.get("trend_summary"):
+                summary += " | " + "; ".join(entry.get("trend_summary", []))
+            lab_lines.append(summary)
+        if lab_lines:
+            pieces.append("Lab avancado:\n" + "\n".join(lab_lines))
+    dicom_findings = st.session_state.get("dicom_findings", [])
+    if dicom_findings:
+        dicom_lines = []
+        for record in dicom_findings[-3:]:
+            meta = "; ".join(record.get("meta_summary", []) or [])
+            cad = "; ".join(record.get("cad_flags", []) or [])
+            dicom_lines.append(f"{record.get('id')}: {meta} {cad}")
+        if dicom_lines:
+            pieces.append("Resumo DICOM detalhado:\n" + "\n".join(dicom_lines))
+    cross_notes = st.session_state.get("cross_validation_notes", [])
+    if cross_notes:
+        pieces.append("Notas combinadas multiexames:\n" + "\n".join(f"- {note}" for note in cross_notes[-5:]))
+    if st.session_state.get("cross_conflicts"):
+        pieces.append("Conflitos detectados: " + "; ".join(st.session_state.cross_conflicts))
+    ecg_insights = st.session_state.get("ecg_insights", [])
+    if ecg_insights:
+        pieces.append(
+            "Resumo ECG:\n" + "\n".join(f"- {item.get('summary', '')}" for item in ecg_insights[-3:])
+        )
+    guideline_plan = st.session_state.get("guideline_plan", [])
+    if guideline_plan:
+        pieces.append("Plano sugerido por diretrizes:\n" + "\n".join(f"- {step}" for step in guideline_plan))
     triage_state = "ativo" if st.session_state.get("triage_mode", False) else "inativo"
     pieces.append(f"Status da triagem: {triage_state}")
     symptom_report = build_symptom_report()
@@ -1366,6 +1527,11 @@ def build_context_sections() -> tuple[str, Dict[str, Any]]:
         "medication_alerts": medication_alerts,
         "exam_findings": st.session_state.exam_findings,
         "imaging_findings": st.session_state.imaging_findings,
+        "advanced_lab_findings": advanced_labs,
+        "dicom_findings": dicom_findings,
+        "cross_notes": cross_notes,
+        "ecg_insights": ecg_insights,
+        "guideline_plan": guideline_plan,
         "planner_state": plan_state,
         "multimodal_signature": fusion_data,
     }
@@ -1434,10 +1600,32 @@ def render_sidebar() -> None:
         )
         if exam_files:
             for exam in exam_files:
+                raw_bytes = exam.getvalue()
+                exam.seek(0)
                 result = st.session_state.exam_pipeline.process(exam)
                 if result and result["id"] not in st.session_state.exam_ids:
                     st.session_state.exam_findings.append(result)
                     st.session_state.exam_ids.add(result["id"])
+                    lab_engine = st.session_state.get("lab_interpreter")
+                    if lab_engine and result["id"] not in st.session_state.advanced_lab_ids:
+                        advanced = lab_engine.ingest_exam(
+                            result,
+                            lab_ranges=LAB_RANGES,
+                            demographics=st.session_state.get("demographics"),
+                        )
+                        if advanced:
+                            st.session_state.advanced_lab_findings.append(advanced)
+                            st.session_state.advanced_lab_ids.add(result["id"])
+                    ecg_engine = st.session_state.get("ecg_interpreter")
+                    if (
+                        ecg_engine
+                        and result["id"] not in st.session_state.ecg_ids
+                        and raw_bytes
+                    ):
+                        insight = ecg_engine.analyze_bytes(exam=result, content=raw_bytes)
+                        if insight:
+                            st.session_state.ecg_insights.append(insight)
+                            st.session_state.ecg_ids.add(result["id"])
 
         if st.session_state.exam_findings:
             with st.expander("Exames processados", expanded=False):
@@ -1457,12 +1645,24 @@ def render_sidebar() -> None:
         )
         if imaging_files:
             for img in imaging_files:
+                raw_bytes = img.getvalue()
+                img.seek(0)
                 result = st.session_state.radiography_service.analyze(img)
                 if result and result["id"] not in st.session_state.imaging_ids:
                     st.session_state.imaging_findings.append(result)
                     st.session_state.imaging_ids.add(result["id"])
                     explain_note = st.session_state.explainability_engine.generate(result)
                     st.session_state.explainability_notes.append(explain_note)
+                    dicom_engine = st.session_state.get("dicom_analyzer")
+                    if dicom_engine and result["id"] not in st.session_state.dicom_ids:
+                        dicom_payload = dicom_engine.analyze_bytes(
+                            file_id=result["id"],
+                            content=raw_bytes,
+                        )
+                        if dicom_payload:
+                            st.session_state.dicom_findings.append(dicom_payload)
+                            st.session_state.dicom_ids.add(result["id"])
+        refresh_multiexam_reasoning()
 
         if st.session_state.imaging_findings:
             with st.expander("Achados de radiografia", expanded=False):
@@ -1566,6 +1766,7 @@ def render_sidebar() -> None:
                     st.warning("JSON invalido para dados de wearables.")
             else:
                 st.session_state.wearable_payload = {}
+            refresh_multiexam_reasoning()
 
         st.markdown("---")
         st.subheader("Multimodal")
@@ -1682,10 +1883,6 @@ def main() -> None:
     )
 
     with triage_tab:
-        render_progress_overview(show_details=False, render_bar=True)
-        with st.expander("Ver detalhes das perguntas", expanded=False):
-            render_progress_overview(show_details=True, render_bar=False)
-
         render_history()
         st.markdown("""<script>
 const chat = document.getElementById(\'chat-history\');
@@ -1721,6 +1918,19 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
                 st.session_state.epidemiology_snapshot = {}
                 st.session_state.critical_events = []
                 st.session_state.triage_mode = False
+                st.session_state.advanced_lab_findings = []
+                st.session_state.advanced_lab_ids = set()
+                st.session_state.dicom_findings = []
+                st.session_state.dicom_ids = set()
+                st.session_state.cross_validation_notes = []
+                st.session_state.cross_conflicts = []
+                st.session_state.ecg_insights = []
+                st.session_state.ecg_ids = set()
+                st.session_state.guideline_recommendations = []
+                st.session_state.guideline_plan = []
+                st.session_state.guideline_cha2ds2 = None
+                st.session_state.guideline_curb65 = None
+                refresh_multiexam_reasoning()
                 st.success("Conversa e contexto reiniciados.")
                 st.rerun()
 
@@ -1993,6 +2203,7 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
     with insights_tab:
         render_wearable_insights()
         render_explainability_panel()
+        render_advanced_insights()
 
     st.markdown(
         """
@@ -2010,6 +2221,11 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
 
 
 
