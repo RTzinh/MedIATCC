@@ -71,6 +71,66 @@ def safe_show_image(image: Any, caption: Optional[str] = None, **kwargs: Any) ->
         st.warning(f"Não foi possível exibir a imagem: {exc}")
 
 
+def default_hl7_pipeline(
+    *,
+    exam: Dict[str, Any],
+    normalized: Dict[str, Any],
+    alerts: List[Dict[str, Any]],
+    demographics: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Stub external HL7/FHIR pipeline hook; replace with production logic."""
+    notes: List[str] = []
+    extra_alerts: List[Dict[str, Any]] = []
+    age = demographics.get("age")
+    troponin = normalized.get("troponina")
+    if troponin is not None:
+        try:
+            troponin_value = float(troponin)
+            threshold = 34.0 if demographics.get("sex") == "M" else 16.0
+            if troponin_value > threshold:
+                notes.append("Troponina acima do limite específico por sexo.")
+                extra_alerts.append(
+                    {
+                        "marker": "troponina",
+                        "value": troponin_value,
+                        "severity": "alto",
+                        "reference": [0, threshold],
+                        "rationale": "Elevação detectada pela pipeline externa.",
+                    }
+                )
+        except (TypeError, ValueError):
+            pass
+    hemoglobina = normalized.get("hemoglobina")
+    if hemoglobina is not None and age and age > 65:
+        try:
+            hb_value = float(hemoglobina)
+            if hb_value < 11:
+                notes.append("Hemoglobina baixa em idoso; sugerir investigação de anemia.")
+        except (TypeError, ValueError):
+            pass
+    return {"notes": notes, "alerts": extra_alerts}
+
+
+def default_cad_handler(
+    *,
+    file_id: str,
+    content: bytes,
+    metadata: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Stub CAD handler; replace with integration to imaging service."""
+    updated_meta = list(metadata.get("meta_summary") or [])
+    updated_meta.append("Laudo CAD externo não configurado; exibindo heurística local.")
+    updated_flags = list(metadata.get("cad_flags") or [])
+    updated_flags.append("Integração CAD aguardando serviço externo.")
+    return {
+        "meta_summary": updated_meta,
+        "cad_flags": updated_flags,
+        "frames": metadata.get("frames"),
+        "hash": metadata.get("hash"),
+        "extras": {"handler": "default_stub"},
+    }
+
+
 CLINICAL_DISCLAIMER = (
     "Aviso: interpretacoes automatizadas complementam o parecer medico humano e nao substituem atendimento presencial."
 )
@@ -346,15 +406,9 @@ def ensure_session_defaults() -> None:
         "guideline_plan": [],
         "guideline_cha2ds2": None,
         "guideline_curb65": None,
-        "demographics": {
-            "age": 68,
-            "sex": "F",
-            "history": {
-                "hypertension": True,
-                "diabetes": False,
-            },
-            "blood_pressure": {"systolic": 110, "diastolic": 65},
-        },
+        "demographics": {},
+        "lab_pipeline_registered": False,
+        "cad_handler_registered": False,
         "question_progress": {
             "total": 10,
             "answered": 0,
@@ -407,6 +461,20 @@ def ensure_session_defaults() -> None:
         st.session_state.ecg_interpreter = ECGInterpreter()
     if "guideline_advisor" not in st.session_state and GuidelineAdvisor:
         st.session_state.guideline_advisor = GuidelineAdvisor()
+    if (
+        st.session_state.get("lab_interpreter")
+        and not st.session_state.get("lab_pipeline_registered")
+        and AdvancedLabInterpreter
+    ):
+        st.session_state.lab_interpreter.register_external_pipeline(default_hl7_pipeline)
+        st.session_state.lab_pipeline_registered = True
+    if (
+        st.session_state.get("dicom_analyzer")
+        and not st.session_state.get("cad_handler_registered")
+        and DICOMAnalyzer
+    ):
+        st.session_state.dicom_analyzer.register_external_handler(default_cad_handler)
+        st.session_state.cad_handler_registered = True
 
 
 class ExamPipeline:
@@ -1592,6 +1660,85 @@ def render_sidebar() -> None:
             adjust_memory_window(memory_window)
 
         st.markdown("---")
+        with st.expander("Dados do paciente", expanded=True):
+            demographics = st.session_state.get("demographics")
+            if not isinstance(demographics, dict):
+                demographics = {}
+            current_history = demographics.get("history")
+            if not isinstance(current_history, dict):
+                current_history = {}
+            age_default = demographics.get("age")
+            age_input = st.number_input(
+                "Idade (anos)",
+                min_value=0,
+                max_value=120,
+                value=int(age_default) if isinstance(age_default, (int, float)) and age_default > 0 else 0,
+                step=1,
+            )
+            sex_options = ["Selecione", "F", "M", "Outro"]
+            current_sex = demographics.get("sex")
+            sex_index = sex_options.index(current_sex) if current_sex in sex_options else 0
+            sex_input = st.selectbox("Sexo", options=sex_options, index=sex_index)
+
+            st.caption("Condições clínicas relevantes")
+            history_labels = {
+                "congestive_heart_failure": "Insuficiência cardíaca",
+                "hypertension": "Hipertensão",
+                "stroke_tia": "AVE/AIT prévio",
+                "diabetes": "Diabetes",
+                "vascular_disease": "Doença vascular",
+            }
+            updated_history: Dict[str, bool] = {}
+            for key, label in history_labels.items():
+                updated_history[key] = st.checkbox(
+                    label,
+                    value=bool(current_history.get(key)),
+                    key=f"history_{key}",
+                )
+
+            st.caption("Pressão arterial (opcional)")
+            blood_pressure = demographics.get("blood_pressure")
+            if not isinstance(blood_pressure, dict):
+                blood_pressure = {}
+            systolic_input = st.number_input(
+                "Pressão sistólica",
+                min_value=0,
+                max_value=250,
+                value=int(blood_pressure.get("systolic", 0) or 0),
+                step=1,
+            )
+            diastolic_input = st.number_input(
+                "Pressão diastólica",
+                min_value=0,
+                max_value=160,
+                value=int(blood_pressure.get("diastolic", 0) or 0),
+                step=1,
+            )
+            notes_input = st.text_area(
+                "Outras informações clínicas (opcional)",
+                value=str(demographics.get("notes") or ""),
+                height=80,
+            )
+
+            processed_demo = {key: value for key, value in demographics.items() if key not in {"age", "sex", "history", "blood_pressure", "notes"}}
+            processed_demo["history"] = updated_history
+            processed_demo["notes"] = notes_input.strip() or None
+            processed_demo["age"] = int(age_input) if age_input > 0 else None
+            processed_demo["sex"] = sex_input if sex_input != "Selecione" else None
+            if systolic_input > 0 and diastolic_input > 0:
+                processed_demo["blood_pressure"] = {
+                    "systolic": int(systolic_input),
+                    "diastolic": int(diastolic_input),
+                }
+            elif "blood_pressure" in processed_demo:
+                processed_demo.pop("blood_pressure")
+            if not processed_demo["notes"]:
+                processed_demo.pop("notes", None)
+
+            if processed_demo != demographics:
+                st.session_state.demographics = processed_demo
+                refresh_multiexam_reasoning()
+                st.success("Dados demográficos atualizados.")
 
         if st.session_state.symptom_log:
             with st.expander("Resumo rapido de sintomas", expanded=False):
