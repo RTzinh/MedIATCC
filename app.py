@@ -1609,7 +1609,7 @@ def render_history() -> None:
 def main() -> None:
     st.set_page_config(
         page_title="MedIA",
-        page_icon="aaaaaaaaaaaaaaa.png",
+        page_icon="🩺",
         layout="centered",
     )
 
