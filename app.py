@@ -1309,8 +1309,10 @@ def generate_qr_code(content: str) -> Optional[bytes]:
 
 def render_patient_dashboard() -> None:
     st.markdown(f"### {ICON_STEP} Painel do paciente", unsafe_allow_html=True)
-    tabs = st.tabs(["Sintomas", "Exames", "Alertas", "Emergencia"])
+    tabs = st.tabs(["Perfil", "Sintomas", "Exames", "Alertas", "Emergencia", "Insights"])
     with tabs[0]:
+        render_patient_profile()
+    with tabs[1]:
         tokens = get_unique_symptoms()
         if tokens:
             prettified = [token.replace("_", " ").capitalize() for token in tokens]
@@ -1318,7 +1320,7 @@ def render_patient_dashboard() -> None:
                 st.markdown(f"- {token}")
         else:
             st.caption("Nenhum sintoma registrado ainda.")
-    with tabs[1]:
+    with tabs[2]:
         if st.session_state.exam_findings or st.session_state.imaging_findings:
             for item in st.session_state.exam_findings[-5:]:
                 st.markdown(f"- {ICON_EXAM} {item['name']}")
@@ -1326,13 +1328,13 @@ def render_patient_dashboard() -> None:
                 st.markdown(f"- {ICON_IMAGING} {item['name']}")
         else:
             st.caption("Nenhum exame anexado.")
-    with tabs[2]:
+    with tabs[3]:
         if st.session_state.medication_alerts:
             for alert in st.session_state.medication_alerts[-5:]:
                 st.markdown(f"- {ICON_INTERACTION} {alert}")
         else:
             st.caption("Nenhum alerta farmacologico no momento.")
-    with tabs[3]:
+    with tabs[4]:
         if st.session_state.critical_events:
             st.markdown(
                 f"<div class='emergency-banner'>{ICON_EMERGENCY} {st.session_state.critical_events[-1]}</div>",
@@ -1344,6 +1346,8 @@ def render_patient_dashboard() -> None:
             )
         else:
             st.caption("Nenhum evento critico detectado.")
+    with tabs[5]:
+        render_advanced_insights()
 
 
 def render_wearable_insights() -> None:
@@ -1534,6 +1538,55 @@ def render_advanced_insights() -> None:
     curb65 = st.session_state.get("guideline_curb65")
     if isinstance(curb65, dict):
         st.caption(f"CURB-65: {curb65.get('score')} - {curb65.get('recommendation')}")
+
+
+def render_patient_profile() -> None:
+    demographics = st.session_state.get("demographics")
+    if not isinstance(demographics, dict) or not any(demographics.values()):
+        st.caption("Perfil demografico ainda nao informado.")
+        return
+
+    age = demographics.get("age")
+    sex = demographics.get("sex")
+    bmi = demographics.get("bmi")
+    weight = demographics.get("weight_kg")
+    height = demographics.get("height_cm")
+    pregnancy_status = demographics.get("pregnancy_status")
+    smoking_status = demographics.get("smoking_status")
+
+    if age:
+        st.markdown(f"- Idade: **{age}** anos")
+    if sex:
+        st.markdown(f"- Sexo: **{sex}**")
+    if weight:
+        st.markdown(f"- Peso: **{weight:.1f} kg**")
+    if height:
+        st.markdown(f"- Altura: **{height:.1f} cm**")
+    if bmi:
+        st.markdown(f"- IMC calculado: **{bmi:.1f}**")
+    if pregnancy_status:
+        st.markdown(f"- Gestacao: **{pregnancy_status}**")
+    if smoking_status:
+        st.markdown(f"- Tabagismo: **{smoking_status}**")
+
+    blood_pressure = demographics.get("blood_pressure")
+    if isinstance(blood_pressure, dict):
+        sys_bp = blood_pressure.get("systolic")
+        dia_bp = blood_pressure.get("diastolic")
+        if sys_bp and dia_bp:
+            st.markdown(f"- Pressao arterial: **{sys_bp}/{dia_bp} mmHg**")
+
+    history = demographics.get("history")
+    if isinstance(history, dict) and any(history.values()):
+        st.markdown("##### Condicoes clinicas registradas")
+        for key, value in history.items():
+            if value:
+                st.markdown(f"- {key.replace('_', ' ').title()}")
+
+    notes = demographics.get("notes")
+    if notes:
+        st.markdown("##### Observacoes adicionais")
+        st.write(notes)
 
 
 def build_context_sections() -> tuple[str, Dict[str, Any]]:
