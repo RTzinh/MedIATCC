@@ -8,12 +8,25 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import streamlit as st
-from groq import BadRequestError
-from langchain.chains import LLMChain
-from langchain.chains.conversation.memory import ConversationBufferWindowMemory
-from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder
-from langchain.schema import SystemMessage
-from langchain_groq import ChatGroq
+try:
+    from groq import BadRequestError
+except ModuleNotFoundError as exc:
+    BadRequestError = Exception  # type: ignore
+    _groq_import_error = exc
+else:
+    _groq_import_error = None
+
+try:
+    from langchain.chains import LLMChain
+    from langchain.chains.conversation.memory import ConversationBufferWindowMemory
+    from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder
+    from langchain.schema import SystemMessage
+    from langchain_groq import ChatGroq
+    LANGCHAIN_AVAILABLE = True
+    LANGCHAIN_IMPORT_ERROR: Optional[Exception] = None
+except ModuleNotFoundError as exc:
+    LANGCHAIN_AVAILABLE = False
+    LANGCHAIN_IMPORT_ERROR = exc
 
 try:
     import PyPDF2  # type: ignore
@@ -1546,6 +1559,21 @@ def main() -> None:
         layout="centered",
     )
 
+    st.title("MedIA")
+    if LANGCHAIN_IMPORT_ERROR is not None:
+        st.error(
+            "Dependencias do LangChain nao foram encontradas. "
+            "Instale os requisitos com `pip install -r requirements.txt` antes de executar o aplicativo."
+        )
+        st.code(str(LANGCHAIN_IMPORT_ERROR))
+        return
+    if _groq_import_error is not None:
+        st.error(
+            "O SDK `groq` nao foi encontrado. Instale-o com `pip install groq` para usar a integracao com o modelo."
+        )
+        st.code(str(_groq_import_error))
+        return
+
     ensure_session_defaults()
     apply_theme_settings()
     render_sidebar()
@@ -1569,7 +1597,6 @@ def main() -> None:
     model = resolved_model
     groq_chat = ChatGroq(groq_api_key=groq_api_key, model_name=model)
 
-    st.title("MedIA")
     st.write(
         "Sou um sistema de apoio medico com analise de exames e radiografias. "
         "Sempre consulte um profissional de saude para confirmacao."
