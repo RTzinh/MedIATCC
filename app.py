@@ -5,38 +5,17 @@ import os
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional
 
 import streamlit as st
-if TYPE_CHECKING:
-    from langchain.chains import LLMChain
-    from langchain.chains.conversation.memory import ConversationBufferWindowMemory
-    from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder
-    from langchain.schema import SystemMessage
-    from langchain_groq import ChatGroq
-
 try:
-    from groq import BadRequestError
+    from groq import BadRequestError, Groq
 except ModuleNotFoundError as exc:
+    Groq = Any  # type: ignore
     BadRequestError = Exception  # type: ignore
-    _groq_import_error = exc
+    _groq_import_error: Optional[Exception] = exc
 else:
     _groq_import_error = None
-
-try:
-    from langchain.chains import LLMChain
-    from langchain.chains.conversation.memory import ConversationBufferWindowMemory
-    from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder
-    from langchain.schema import SystemMessage
-    from langchain_groq import ChatGroq
-    LANGCHAIN_AVAILABLE = True
-    LANGCHAIN_IMPORT_ERROR: Optional[Exception] = None
-except ModuleNotFoundError as exc:
-    LANGCHAIN_AVAILABLE = False
-    LANGCHAIN_IMPORT_ERROR = exc
-    LLMChain = Any  # type: ignore
-    ConversationBufferWindowMemory = Any  # type: ignore
-    ChatPromptTemplate = HumanMessagePromptTemplate = MessagesPlaceholder = SystemMessage = ChatGroq = Any  # type: ignore
 
 try:
     import PyPDF2  # type: ignore
@@ -323,9 +302,6 @@ MEDICATION_MONOGRAPHS = {
 
 def ensure_session_defaults() -> None:
     defaults = {
-        "memory": ConversationBufferWindowMemory(
-            k=60, memory_key="chat_history", return_messages=True
-        ),
         "history": [],
         "exam_findings": [],
         "exam_ids": set(),
@@ -356,6 +332,7 @@ def ensure_session_defaults() -> None:
         },
         "education_checklist": {},
         "memory_window": 60,
+        "memory_messages": [],
         "printable_summary": "",
         "dashboard_tab": "Sintomas",
         "triage_mode": False,
@@ -798,19 +775,40 @@ def truncate_text(value: str, limit: int = 6000) -> str:
     )
 
 
-def predict_with_fallback(conversation: LLMChain, text: str) -> str:
+def predict_with_fallback(client: Groq, model_name: str, messages: List[Dict[str, str]]) -> str:
     limits = [6000, 4500, 3000]
     last_error: Optional[BadRequestError] = None
     for limit in limits:
-        trimmed_text = truncate_text(text, limit=limit)
+        trimmed_messages = _limit_last_user_message(messages, limit)
         try:
-            return conversation.predict(human_input=trimmed_text)
+            completion = client.chat.completions.create(
+                model=model_name,
+                messages=trimmed_messages,
+            )
+            choice = completion.choices[0]
+            content = getattr(choice.message, "content", "") if hasattr(choice, "message") else ""
+            return content or ""
         except BadRequestError as exc:
             last_error = exc
             continue
     if last_error is not None:
         raise last_error
     raise BadRequestError("Falha ao gerar resposta apos tentativas de reducao de contexto.")
+
+
+def _limit_last_user_message(messages: List[Dict[str, str]], limit: int) -> List[Dict[str, str]]:
+    trimmed: List[Dict[str, str]] = []
+    for idx, message in enumerate(messages):
+        if message.get("role") == "user" and idx == len(messages) - 1:
+            trimmed.append(
+                {
+                    "role": message["role"],
+                    "content": truncate_text(message.get("content", ""), limit=limit),
+                }
+            )
+        else:
+            trimmed.append(message)
+    return trimmed
 
 
 def extract_symptom_candidates(text: str) -> List[str]:
@@ -951,50 +949,46 @@ def parse_numeric_value(value: Any) -> Optional[float]:
 
 
 def clear_conversation_memory() -> None:
-    memory = st.session_state.get("memory")
-    if not memory:
-        return
-    try:
-        clear_fn = getattr(memory, "clear", None)
-        if callable(clear_fn):
-            clear_fn()
-            return
-    except Exception:
-        pass
-    chat_memory = getattr(memory, "chat_memory", None)
-    if chat_memory:
-        if hasattr(chat_memory, "clear") and callable(chat_memory.clear):
-            try:
-                chat_memory.clear()
-                return
-            except Exception:
-                pass
-        if hasattr(chat_memory, "messages"):
-            try:
-                messages = getattr(chat_memory, "messages")
-                if isinstance(messages, list):
-                    chat_memory.messages = []
-            except Exception:
-                pass
+    st.session_state.memory_messages = []
 
 
 def adjust_memory_window(window: int) -> None:
-    memory = st.session_state.get("memory")
-    if not memory:
-        return
-    try:
-        if hasattr(memory, "k"):
-            memory.k = window
-    except Exception:
-        pass
-    chat_memory = getattr(memory, "chat_memory", None)
-    if chat_memory and hasattr(chat_memory, "messages"):
-        try:
-            messages = getattr(chat_memory, "messages", None)
-            if isinstance(messages, list) and len(messages) > window:
-                chat_memory.messages = messages[-window:]
-        except Exception:
-            pass
+    messages = st.session_state.get("memory_messages")
+    if not isinstance(messages, list):
+        messages = []
+    max_messages = max(window * 2, 2)
+    if len(messages) > max_messages:
+        st.session_state.memory_messages = messages[-max_messages:]
+    else:
+        st.session_state.memory_messages = messages
+
+
+def append_memory_message(role: str, content: str) -> None:
+    messages = st.session_state.get("memory_messages")
+    if not isinstance(messages, list):
+        messages = []
+    messages.append({"role": role, "content": content})
+    st.session_state.memory_messages = messages
+    adjust_memory_window(int(st.session_state.get("memory_window", 60)))
+
+
+def pop_last_memory_message() -> None:
+    messages = st.session_state.get("memory_messages")
+    if isinstance(messages, list) and messages:
+        messages.pop()
+        st.session_state.memory_messages = messages
+
+
+def build_model_messages(system_prompt: str) -> List[Dict[str, str]]:
+    messages = [{"role": "system", "content": system_prompt}]
+    stored = st.session_state.get("memory_messages")
+    if isinstance(stored, list):
+        messages.extend(
+            {"role": item.get("role", "user"), "content": item.get("content", "")}
+            for item in stored
+            if isinstance(item, dict) and "content" in item
+        )
+    return messages
 
 
 def analyze_exam_item(item: Dict[str, Any]) -> List[str]:
@@ -1627,13 +1621,6 @@ def main() -> None:
     )
 
     st.title("MedIA")
-    if LANGCHAIN_IMPORT_ERROR is not None:
-        st.error(
-            "Dependencias do LangChain nao foram encontradas. "
-            "Instale os requisitos com `pip install -r requirements.txt` antes de executar o aplicativo."
-        )
-        st.code(str(LANGCHAIN_IMPORT_ERROR))
-        return
     if _groq_import_error is not None:
         st.error(
             "O SDK `groq` nao foi encontrado. Instale-o com `pip install groq` para usar a integracao com o modelo."
@@ -1665,7 +1652,12 @@ def main() -> None:
             "Atualize GROQ_MODEL_NAME para evitar esta mensagem."
         )
     model = resolved_model
-    groq_chat = ChatGroq(groq_api_key=groq_api_key, model_name=model)
+    try:
+        groq_client = Groq(api_key=groq_api_key)
+    except Exception as exc:
+        st.error("Falha ao inicializar o cliente Groq. Verifique a chave de API.")
+        st.code(str(exc))
+        return
 
     st.write(
         "Sou um sistema de apoio medico com analise de exames e radiografias. "
@@ -1683,21 +1675,6 @@ def main() -> None:
         "informacoes especificas, atenda prontamente e retome a triagem apenas se ele quiser prosseguir. "
         "Quando detectar sinais criticos, priorize orientacao emergencial. "
         "Mantenha o dialogo aberto apos concluir as perguntas, dando continuidade a duvidas ou novas solicitacoes sem forcar reinicio."
-    )
-
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            SystemMessage(content=system_prompt),
-            MessagesPlaceholder(variable_name="chat_history"),
-            HumanMessagePromptTemplate.from_template("{human_input}"),
-        ]
-    )
-
-    conversation = LLMChain(
-        llm=groq_chat,
-        prompt=prompt,
-        verbose=False,
-        memory=st.session_state.memory,
     )
 
     triage_tab, patient_tab, insights_tab = st.tabs(
@@ -1903,10 +1880,14 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
             if context_payload:
                 composed_input = f"{context_payload}\n\n{meta_block}\n\nEntrada do paciente: {user_input}"
 
+            append_memory_message("user", composed_input)
+            model_messages = build_model_messages(system_prompt)
+            model_error_context = {}
             try:
-                response = predict_with_fallback(conversation, composed_input)
-                model_error_context = {}
+                response = predict_with_fallback(groq_client, model, model_messages)
+                append_memory_message("assistant", response)
             except BadRequestError as exc:
+                pop_last_memory_message()
                 error_text = str(exc)
                 model_error_context = {}
                 if "model_decommissioned" in error_text:
@@ -1942,6 +1923,7 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
                 )
                 return
             except Exception as exc:  # pragma: no cover - resiliencia
+                pop_last_memory_message()
                 friendly = (
                     "MedIA encontrou um erro inesperado ao gerar a resposta. "
                     "Atualize ou tente novamente em instantes."
