@@ -27,6 +27,10 @@ try:
 except ModuleNotFoundError as exc:
     LANGCHAIN_AVAILABLE = False
     LANGCHAIN_IMPORT_ERROR = exc
+    class LLMChain:  # type: ignore
+        ...
+    ConversationBufferWindowMemory = object  # type: ignore
+    ChatPromptTemplate = HumanMessagePromptTemplate = MessagesPlaceholder = SystemMessage = ChatGroq = object  # type: ignore*** End Patch
 
 try:
     import PyPDF2  # type: ignore
