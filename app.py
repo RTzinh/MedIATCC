@@ -937,6 +937,53 @@ def parse_numeric_value(value: Any) -> Optional[float]:
     return None
 
 
+def clear_conversation_memory() -> None:
+    memory = st.session_state.get("memory")
+    if not memory:
+        return
+    try:
+        clear_fn = getattr(memory, "clear", None)
+        if callable(clear_fn):
+            clear_fn()
+            return
+    except Exception:
+        pass
+    chat_memory = getattr(memory, "chat_memory", None)
+    if chat_memory:
+        if hasattr(chat_memory, "clear") and callable(chat_memory.clear):
+            try:
+                chat_memory.clear()
+                return
+            except Exception:
+                pass
+        if hasattr(chat_memory, "messages"):
+            try:
+                messages = getattr(chat_memory, "messages")
+                if isinstance(messages, list):
+                    chat_memory.messages = []
+            except Exception:
+                pass
+
+
+def adjust_memory_window(window: int) -> None:
+    memory = st.session_state.get("memory")
+    if not memory:
+        return
+    try:
+        if hasattr(memory, "k"):
+            memory.k = window
+    except Exception:
+        pass
+    chat_memory = getattr(memory, "chat_memory", None)
+    if chat_memory and hasattr(chat_memory, "messages"):
+        try:
+            messages = getattr(chat_memory, "messages", None)
+            if isinstance(messages, list) and len(messages) > window:
+                chat_memory.messages = messages[-window:]
+        except Exception:
+            pass
+
+
 def analyze_exam_item(item: Dict[str, Any]) -> List[str]:
     findings: List[str] = []
     normalized = item.get("normalized") or {}
@@ -1361,10 +1408,7 @@ def render_sidebar() -> None:
         )
         if memory_window != st.session_state.memory_window:
             st.session_state.memory_window = memory_window
-            st.session_state.memory.k = memory_window
-            messages = getattr(st.session_state.memory.chat_memory, "messages", [])
-            if messages and len(messages) > memory_window:
-                st.session_state.memory.chat_memory.messages = messages[-memory_window:]
+            adjust_memory_window(memory_window)
 
         st.markdown("---")
 
@@ -1588,7 +1632,10 @@ def main() -> None:
     apply_theme_settings()
     render_sidebar()
 
-    groq_api_key = st.secrets["GROQ_API_KEY"]
+    groq_api_key = st.secrets.get("GROQ_API_KEY")
+    if not groq_api_key:
+        st.error("GROQ_API_KEY nao encontrado em st.secrets. Configure a chave ou defina a variavel de ambiente.")
+        return
     default_model = "llama-3.3-70b-versatile"
     model_aliases = {
         "llama3-8b-8192": "llama-3.1-8b-instant",
@@ -1668,7 +1715,7 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
             normalized_input = user_input.strip().lower()
             if normalized_input in {"limpar conversa", "reset", "reiniciar"}:
                 st.session_state.history = []
-                st.session_state.memory.clear()
+                clear_conversation_memory()
                 st.session_state.symptom_log = []
                 st.session_state.education_recommendations = []
                 st.session_state.medication_alerts = []
