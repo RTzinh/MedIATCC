@@ -1599,6 +1599,7 @@ def build_context_sections() -> tuple[str, Dict[str, Any]]:
     if wearable_payload:
         wearable_context = "Dados de wearables: " + json.dumps(wearable_payload)[:800]
     medication_alerts = st.session_state.medication_alerts
+    demographics = st.session_state.get("demographics", {})
     pieces = []
     if exam_context:
         pieces.append("Resumo de exames estruturados:\n" + exam_context)
@@ -1613,6 +1614,60 @@ def build_context_sections() -> tuple[str, Dict[str, Any]]:
         pieces.append(wearable_context)
     if medication_alerts:
         pieces.append("Alertas farmacologicos ativos: " + "; ".join(sorted(set(medication_alerts))))
+    if isinstance(demographics, dict) and any(
+        value for value in demographics.values() if value not in (None, "", [], {})
+    ):
+        demo_lines: List[str] = []
+        age = demographics.get("age")
+        if age not in (None, "", 0):
+            demo_lines.append(f"Idade: {age} anos")
+        sex = demographics.get("sex")
+        if sex:
+            demo_lines.append(f"Sexo: {sex}")
+        weight = demographics.get("weight_kg")
+        if weight not in (None, "", 0):
+            try:
+                demo_lines.append(f"Peso: {float(weight):.1f} kg")
+            except (TypeError, ValueError):
+                demo_lines.append(f"Peso: {weight} kg")
+        height = demographics.get("height_cm")
+        if height not in (None, "", 0):
+            try:
+                demo_lines.append(f"Altura: {float(height):.1f} cm")
+            except (TypeError, ValueError):
+                demo_lines.append(f"Altura: {height} cm")
+        bmi = demographics.get("bmi")
+        if bmi not in (None, "", 0):
+            try:
+                demo_lines.append(f"IMC: {float(bmi):.1f}")
+            except (TypeError, ValueError):
+                demo_lines.append(f"IMC: {bmi}")
+        pregnancy_status = demographics.get("pregnancy_status")
+        if pregnancy_status:
+            demo_lines.append(f"Gestacao: {pregnancy_status}")
+        smoking_status = demographics.get("smoking_status")
+        if smoking_status:
+            demo_lines.append(f"Tabagismo: {smoking_status}")
+        blood_pressure = demographics.get("blood_pressure")
+        if isinstance(blood_pressure, dict):
+            systolic = blood_pressure.get("systolic")
+            diastolic = blood_pressure.get("diastolic")
+            if systolic and diastolic:
+                demo_lines.append(f"Pressao arterial: {systolic}/{diastolic} mmHg")
+        history = demographics.get("history")
+        if isinstance(history, dict):
+            conditions = [
+                key.replace("_", " ").title()
+                for key, value in history.items()
+                if value
+            ]
+            if conditions:
+                demo_lines.append("Historico: " + ", ".join(conditions))
+        notes = demographics.get("notes")
+        if notes:
+            demo_lines.append("Observacoes: " + str(notes))
+        if demo_lines:
+            pieces.append("Perfil do paciente:\n" + "\n".join(f"- {line}" for line in demo_lines))
     advanced_labs = st.session_state.get("advanced_lab_findings", [])
     if advanced_labs:
         lab_lines = []
@@ -1674,6 +1729,7 @@ def build_context_sections() -> tuple[str, Dict[str, Any]]:
         "medication_alerts": medication_alerts,
         "exam_findings": st.session_state.exam_findings,
         "imaging_findings": st.session_state.imaging_findings,
+        "demographics": demographics if isinstance(demographics, dict) else {},
         "advanced_lab_findings": advanced_labs,
         "dicom_findings": dicom_findings,
         "cross_notes": cross_notes,
