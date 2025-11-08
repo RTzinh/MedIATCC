@@ -689,6 +689,7 @@ def ensure_session_defaults() -> None:
         "voice_agent_status": "",
         "hackathon_triage_report": None,
         "hackathon_triage_payload": {},
+        "audio_toggle": False,
         "supabase_status": "",
     }
     for key, value in defaults.items():
@@ -3310,7 +3311,7 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
                 update_question_progress(final_response)
             st.session_state.printable_summary = build_symptom_report()
 
-            if st.session_state.audio_toggle:
+            if st.session_state.get("audio_toggle", False):
                 audio_bytes = generate_tts_audio(final_response)
                 if audio_bytes:
                     st.session_state.audio_responses.append(audio_bytes)
