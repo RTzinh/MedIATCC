@@ -6,7 +6,7 @@ import re
 import time
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import streamlit as st
 try:
@@ -59,6 +59,12 @@ try:
     import qrcode  # type: ignore
 except ImportError:  # pragma: no cover
     qrcode = None
+
+try:
+    from supabase import Client as SupabaseClient, create_client  # type: ignore
+except ImportError:  # pragma: no cover
+    SupabaseClient = None
+    create_client = None
 
 try:
     from med_modules import (
@@ -290,6 +296,103 @@ def build_final_report_text() -> str:
     if not sections:
         sections.append("Sem informacoes clinicas registradas ainda.")
     return "\n\n".join(sections)
+
+
+def get_supabase_client() -> Optional[SupabaseClient]:
+    if create_client is None:
+        return None
+    client = st.session_state.get("supabase_client")
+    if client:
+        return client
+    url = (
+        os.environ.get("SUPABASE_URL")
+        or st.secrets.get("SUPABASE_URL")
+        if hasattr(st, "secrets")
+        else None
+    )
+    key = (
+        os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        or st.secrets.get("SUPABASE_SERVICE_ROLE_KEY")
+        if hasattr(st, "secrets")
+        else None
+    )
+    if not url or not key:
+        return None
+    try:
+        client = create_client(url, key)
+    except Exception:
+        return None
+    st.session_state.supabase_client = client
+    return client
+
+
+def normalize_supabase_sex(value: Optional[str]) -> Optional[str]:
+    mapping = {"F": "F", "M": "M", "Feminino": "F", "Masculino": "M", "Outro": "O"}
+    if not value:
+        return None
+    return mapping.get(value, "N/D")
+
+
+def store_triage_in_supabase(
+    *,
+    demographics: Dict[str, Any],
+    triage_payload: NursingTriageInput,
+    report: Any,
+) -> None:
+    client = get_supabase_client()
+    if client is None:
+        return
+    patient_name = demographics.get("patient_name")
+    if not patient_name:
+        st.session_state.supabase_status = "Informe o nome do paciente para salvar no Supabase."
+        return
+    patient_record: Dict[str, Any] = {
+        "nome_completo": patient_name,
+        "email": demographics.get("patient_email"),
+        "telefone": demographics.get("patient_phone"),
+        "sexo": normalize_supabase_sex(demographics.get("sex")) or "N/D",
+        "endereco": demographics.get("address"),
+    }
+    triage_data = triage_payload.__dict__ if hasattr(triage_payload, "__dict__") else triage_payload
+    if not isinstance(triage_data, dict):
+        triage_data = {}
+    try:
+        patient_result = client.table("pacientes").upsert(
+            patient_record, on_conflict="email"
+        ).select("id").execute()
+        patient_id = patient_result.data[0]["id"]
+        triage_payload_db = {
+            "paciente_id": patient_id,
+            "systolic": triage_data.get("systolic"),
+            "diastolic": triage_data.get("diastolic"),
+            "heart_rate": triage_data.get("heart_rate"),
+            "temperatura": triage_data.get("temperature"),
+            "spo2": triage_data.get("spo2"),
+            "idade": demographics.get("age"),
+            "sexo": normalize_supabase_sex(demographics.get("sex")) or "N/D",
+            "chronic_conditions": triage_data.get("chronic_conditions"),
+            "allergies": triage_data.get("allergies"),
+            "medications": triage_data.get("medications"),
+            "symptoms": triage_data.get("symptoms"),
+            "observacoes": demographics.get("notes"),
+        }
+        triage_result = client.table("triagens").insert(triage_payload_db).select("id").execute()
+        triage_id = triage_result.data[0]["id"]
+        report_dict = report.to_dict() if hasattr(report, "to_dict") else report
+        client.table("relatorios_triagem").insert(
+            {
+                "triagem_id": triage_id,
+                "risco": report_dict["relatorio"]["risco"],
+                "prioridade": report_dict["relatorio"]["prioridade"],
+                "alertas": report_dict["relatorio"]["alertas"],
+                "encaminhamentos": report_dict["relatorio"]["encaminhamentos"],
+                "justificativa": report_dict["relatorio"]["justificativa"],
+                "relatorio_json": report_dict,
+            }
+        ).execute()
+        st.session_state.supabase_status = "Triagem salva no Supabase com sucesso."
+    except Exception as exc:
+        st.session_state.supabase_status = f"Falha ao salvar no Supabase: {exc}"
 
 
 CLINICAL_DISCLAIMER = (
@@ -586,6 +689,7 @@ def ensure_session_defaults() -> None:
         "voice_agent_status": "",
         "hackathon_triage_report": None,
         "hackathon_triage_payload": {},
+        "supabase_status": "",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -1834,9 +1938,15 @@ def render_patient_profile() -> None:
     if notes:
         st.markdown("##### Observacoes adicionais")
         st.write(notes)
-
-
-def build_context_sections() -> tuple[str, Dict[str, Any]]:
+def prepare_context_for_model(
+    user_input: str,
+    medication_alerts: Optional[List[str]] = None,
+) -> Tuple[str, Dict[str, Any]]:
+    """Compila o contexto clínico usado no prompt do modelo conversacional."""
+    med_alerts = medication_alerts or st.session_state.get("medication_alerts", [])
+    pieces: List[str] = [
+        "Mensagem recente do paciente:\n" + user_input.strip(),
+    ]
     exam_context = st.session_state.exam_pipeline.render_for_prompt(st.session_state.exam_findings)
     imaging_context = st.session_state.radiography_service.render_for_prompt(
         st.session_state.imaging_findings
@@ -1845,9 +1955,7 @@ def build_context_sections() -> tuple[str, Dict[str, Any]]:
     wearable_context = ""
     if wearable_payload:
         wearable_context = "Dados de wearables: " + json.dumps(wearable_payload)[:800]
-    medication_alerts = st.session_state.medication_alerts
     demographics = st.session_state.get("demographics", {})
-    pieces = []
     if exam_context:
         pieces.append("Resumo de exames estruturados:\n" + exam_context)
         analyses = []
@@ -1859,8 +1967,8 @@ def build_context_sections() -> tuple[str, Dict[str, Any]]:
         pieces.append("Resumo de radiografias:\n" + imaging_context)
     if wearable_context:
         pieces.append(wearable_context)
-    if medication_alerts:
-        pieces.append("Alertas farmacologicos ativos: " + "; ".join(sorted(set(medication_alerts))))
+    if med_alerts:
+        pieces.append("Alertas farmacologicos ativos: " + "; ".join(sorted(set(med_alerts))))
     if isinstance(demographics, dict) and any(
         value for value in demographics.values() if value not in (None, "", [], {})
     ):
@@ -1990,7 +2098,7 @@ def build_context_sections() -> tuple[str, Dict[str, Any]]:
     context_payload = truncate_text("\n\n".join(pieces), limit=4000)
     context_meta = {
         "critical_flags": st.session_state.critical_events,
-        "medication_alerts": medication_alerts,
+        "medication_alerts": med_alerts,
         "exam_findings": st.session_state.exam_findings,
         "imaging_findings": st.session_state.imaging_findings,
         "demographics": demographics if isinstance(demographics, dict) else {},
@@ -2178,7 +2286,6 @@ def render_sidebar() -> None:
 
 
 def render_patient_panel() -> None:
-    st.markdown("### Perfil e triagem de enfermagem")
     demographics = st.session_state.get("demographics")
     if not isinstance(demographics, dict):
         demographics = {}
@@ -2221,6 +2328,22 @@ def render_patient_panel() -> None:
     triage_available = isinstance(NursingTriageInput, type)
 
     with st.form("patient_profile_form"):
+        patient_name_input = st.text_input(
+            "Nome completo do paciente",
+            value=demographics.get("patient_name", ""),
+        )
+        patient_email_input = st.text_input(
+            "Email do paciente",
+            value=demographics.get("patient_email", ""),
+        )
+        patient_phone_input = st.text_input(
+            "Telefone / Contato",
+            value=demographics.get("patient_phone", ""),
+        )
+        patient_address_input = st.text_input(
+            "Endereco (opcional)",
+            value=demographics.get("patient_address", ""),
+        )
         col_demo, col_biometrics = st.columns(2)
         age_default = demographics.get("age")
         age_input = col_demo.number_input(
@@ -2416,6 +2539,10 @@ def render_patient_panel() -> None:
         else:
             processed_demo.pop("blood_pressure", None)
         processed_demo["blood_type"] = None if blood_type == "Nao informado" else blood_type
+        processed_demo["patient_name"] = patient_name_input.strip() or None
+        processed_demo["patient_email"] = patient_email_input.strip() or None
+        processed_demo["patient_phone"] = patient_phone_input.strip() or None
+        processed_demo["patient_address"] = patient_address_input.strip() or None
         if not processed_demo["notes"]:
             processed_demo.pop("notes", None)
         if not processed_demo["weight_kg"]:
@@ -2451,6 +2578,11 @@ def render_patient_panel() -> None:
             st.session_state.hackathon_triage_report = report
             st.session_state.hackathon_triage_payload = payload.to_dict()
             st.success("Triagem automatizada atualizada com sucesso.")
+            store_triage_in_supabase(
+                demographics=processed_demo,
+                triage_payload=payload,
+                report=report,
+            )
         else:
             st.warning("Módulo do Hackathon não está disponível neste ambiente.")
 
@@ -2549,42 +2681,9 @@ def render_patient_panel() -> None:
             for note in st.session_state.explainability_notes[-5:]:
                 st.write("- " + note)
 
-    st.markdown("---")
-    st.subheader("Relatorio final e Hackathon")
-    final_summary = st.session_state.printable_summary or build_symptom_report()
-    st.text_area(
-        "Resumo consolidado",
-        value=final_summary,
-        height=180,
-        disabled=True,
-    )
-    st.download_button(
-        "Baixar relatorio (.txt)",
-        data=final_summary.encode("utf-8"),
-        file_name="relatorio_medIA.txt",
-        mime="text/plain",
-    )
-    hackathon_report = st.session_state.get("hackathon_triage_report")
-    if hackathon_report:
-        report_dict = hackathon_report.to_dict() if hasattr(hackathon_report, "to_dict") else hackathon_report
-        summary = (
-            hackathon_report.summary_markdown()
-            if hasattr(hackathon_report, "summary_markdown")
-            else ""
-        )
-        if summary:
-            st.markdown(summary)
-        score = report_dict.get("processamento", {}).get("pontuacao", 0)
-        st.progress(min(score / 3, 1.0))
-        download_payload = json.dumps(report_dict, ensure_ascii=False, indent=2)
-        st.download_button(
-            "Baixar relatório da triagem (JSON)",
-            data=download_payload.encode("utf-8"),
-            file_name="hackathon_triage_report.json",
-            mime="application/json",
-        )
-    else:
-        st.caption("Preencha o formulário e clique em salvar para gerar o relatório automático.")
+    supabase_msg = st.session_state.get("supabase_status")
+    if supabase_msg:
+        st.caption(f"Supabase: {supabase_msg}")
 
     st.markdown("---")
     st.subheader("Educacao personalizada")
@@ -3262,16 +3361,17 @@ def main() -> None:
     apply_theme_settings()
     render_sidebar()
 
-    main_col, patient_col, report_col = st.columns([2.6, 1.5, 1.1], gap="large")
+    content_col, side_col = st.columns([2.6, 1.2], gap="large")
 
-    with patient_col:
-        render_patient_panel()
-
-    with report_col:
-        render_report_viewer()
-
-    with main_col:
+    with content_col:
         render_primary_workspace()
+
+    with side_col:
+        profile_tab, report_tab = st.tabs(["Perfil & triagem", "Relatorio"])
+        with profile_tab:
+            render_patient_panel()
+        with report_tab:
+            render_report_viewer()
 
 
 
