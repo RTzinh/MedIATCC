@@ -3,6 +3,7 @@ import io
 import json
 import os
 import re
+import time
 from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -41,6 +42,11 @@ try:
     from gtts import gTTS  # type: ignore
 except ImportError:  # pragma: no cover
     gTTS = None
+
+try:
+    import google.generativeai as genai  # type: ignore
+except ImportError:  # pragma: no cover
+    genai = None
 
 try:
     import qrcode  # type: ignore
@@ -161,6 +167,42 @@ def register_external_services() -> None:
         elif not st.session_state.get("cad_handler_registered"):
             cad_engine.register_external_handler(default_cad_handler)
             st.session_state.cad_handler_registered = True
+
+
+DEFAULT_GEMINI_API_KEY = (
+    os.environ.get("GEMINI_API_KEY")
+    or os.environ.get("GOOGLE_API_KEY")
+    or "AIzaSyCag_eYIGTTZfw-xSUw8iERcNuroOZO7G4"
+)
+DEFAULT_GEMINI_MODEL = os.environ.get("GEMINI_MODEL_NAME", "gemini-1.5-flash")
+VOICE_AGENT_INSTRUCTIONS = (
+    "Voce e o agente de voz do MedIA. Transcreva falas em portugues e ofereca orientacoes medicas de apoio, "
+    "reforcando que o paciente deve buscar atendimento presencial em situacoes criticas. Use linguagem simples, "
+    "acolhedora e sem jargoes. Quando nao tiver informacoes suficientes, faca perguntas abertas para entender melhor."
+)
+VOICE_AGENT_RESPONSE_SCHEMA = (
+    "Retorne um JSON valido com as chaves 'transcription' e 'assistant_reply'. "
+    "Em 'transcription' escreva a transcricao literal do paciente. Em 'assistant_reply' forneca a resposta do agente."
+)
+
+QUICK_PROMPTS = [
+    {
+        "label": "🌡️ Febre alta",
+        "text": "Estou com febre acima de 39 °C ha dois dias mesmo tomando antitermicos. Quais sinais indicam emergencia?",
+    },
+    {
+        "label": "❤️ Dor no peito",
+        "text": "Sinto dor aguda no peito que irradia para o braco esquerdo acompanhada de suor frio. O que devo observar?",
+    },
+    {
+        "label": "💊 Medicacoes",
+        "text": "Quais cuidados preciso ter ao combinar ibuprofeno com dipirona e um anti-hipertensivo?",
+    },
+    {
+        "label": "📝 Resumo",
+        "text": "Pode resumir nossa conversa e listar exames ou orientacoes que devo seguir nas proximas 24h?",
+    },
+]
 
 
 CLINICAL_DISCLAIMER = (
@@ -453,6 +495,8 @@ def ensure_session_defaults() -> None:
         "printable_summary": "",
         "dashboard_tab": "Sintomas",
         "triage_mode": False,
+        "voice_conversation": [],
+        "voice_agent_status": "",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -1156,108 +1200,265 @@ def apply_theme_settings() -> None:
     palette = THEME_STYLES.get(theme, THEME_STYLES["Claro"])
     css = f"""
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
     .stApp {{
         background-color: {palette['bg']} !important;
         color: {palette['text']} !important;
         font-size: {font_scale}em;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
     }}
+    
+    /* Header moderno */
+    h1 {{
+        font-weight: 700 !important;
+        font-size: 2.5em !important;
+        margin-bottom: 0.3em !important;
+        background: linear-gradient(135deg, {palette['accent']} 0%, #5b21b6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }}
+    
+    h2, h3 {{
+        font-weight: 600 !important;
+        color: {palette['text']} !important;
+    }}
+    
+    /* Botões modernos */
+    .stButton button {{
+        border-radius: 12px !important;
+        font-weight: 500 !important;
+        transition: all 0.3s ease !important;
+        border: 1px solid {palette['accent_soft']} !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important;
+    }}
+    
+    .stButton button:hover {{
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
+    }}
+    
+    /* Botão de voz especial */
+    .voice-button {{
+        background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%) !important;
+        color: white !important;
+        border: none !important;
+        font-size: 1.1em !important;
+        padding: 0.8em 1.5em !important;
+        border-radius: 50px !important;
+        box-shadow: 0 4px 15px rgba(236, 72, 153, 0.3) !important;
+    }}
+    
+    .voice-button:hover {{
+        box-shadow: 0 6px 20px rgba(236, 72, 153, 0.4) !important;
+        transform: scale(1.05) !important;
+    }}
+    
+    /* Panels melhorados */
     .themed-panel {{
         background: {palette['panel']};
         border: 1px solid {palette['accent_soft']};
-        border-radius: 14px;
-        padding: 18px;
-        margin-bottom: 14px;
-        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 16px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+        transition: all 0.3s ease;
     }}
+    
+    .themed-panel:hover {{
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+        transform: translateY(-2px);
+    }}
+    
     .step-card {{
         background: {palette['panel']};
         border-left: 6px solid {palette['accent']};
         border-radius: 12px;
-        padding: 12px 16px;
-        margin-bottom: 10px;
+        padding: 16px 20px;
+        margin-bottom: 12px;
         color: {palette['text']};
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
     }}
+    
     .step-card.inactive {{
         border-left-color: {palette['accent_soft']};
         opacity: 0.6;
     }}
+    
+    /* Badges modernos */
     .badge-accent {{
-        background: {palette['accent_soft']};
-        color: {palette['accent']};
-        padding: 2px 10px;
-        border-radius: 999px;
+        background: {palette['accent']};
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
         font-size: 0.75em;
         font-weight: 600;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }}
+    
+    /* Alertas melhorados */
     .emergency-banner {{
-        background: #fee2e2;
-        border: 1px solid #b91c1c;
-        border-radius: 12px;
-        padding: 14px;
+        background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+        border: 2px solid #dc2626;
+        border-radius: 16px;
+        padding: 16px;
         color: #7f1d1d;
         margin-bottom: 12px;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
     }}
+    
     .warning-banner {{
-        background: #fef3c7;
-        border: 1px solid #d97706;
-        border-radius: 12px;
-        padding: 14px;
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        border: 2px solid #f59e0b;
+        border-radius: 16px;
+        padding: 16px;
         color: #92400e;
         margin-bottom: 12px;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
     }}
+    
+    /* Cards de educação */
     .education-card {{
         border: 1px solid {palette['accent_soft']};
-        border-radius: 12px;
-        padding: 12px;
+        border-radius: 14px;
+        padding: 16px;
         background: {palette['panel']};
-        margin-bottom: 10px;
+        margin-bottom: 12px;
+        transition: all 0.3s ease;
     }}
-    .dashboard-tab button[role="tab"] {{
-        border-radius: 999px !important;
+    
+    .education-card:hover {{
+        border-color: {palette['accent']};
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        transform: translateY(-2px);
     }}
+    
+    /* Tabs modernos */
     .stTabs [data-baseweb="tab-list"] {{
         background: transparent;
-        border-bottom: 1px solid {palette['accent_soft']};
-        margin-bottom: 8px;
+        border-bottom: 2px solid {palette['accent_soft']};
+        margin-bottom: 16px;
+        gap: 8px;
     }}
+    
     .stTabs [data-baseweb="tab"] {{
         background: transparent;
+        border-radius: 12px 12px 0 0;
+        padding: 12px 24px !important;
+        font-weight: 500;
     }}
+    
+    .stTabs [data-baseweb="tab"]:hover {{
+        background: {palette['accent_soft']};
+    }}
+    
     .stTabs [data-baseweb="tab-panel"] {{
         background: transparent !important;
         border: none !important;
+        padding-top: 16px !important;
     }}
-    .stTabs [data-baseweb="tab-panel"] > div:first-child {{
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-    }}
+    
+    /* Progress bar */
     .stProgress > div {{
         background: {palette['accent_soft']} !important;
-        border-radius: 999px !important;
+        border-radius: 20px !important;
+        height: 12px !important;
     }}
+    
     .stProgress > div > div {{
-        background: {palette['accent']} !important;
+        background: linear-gradient(90deg, {palette['accent']} 0%, #8b5cf6 100%) !important;
+        border-radius: 20px !important;
     }}
+    
+    /* Input de chat aprimorado */
     div[data-testid="stChatInput"] {{
         position: fixed;
-        bottom: 18px;
+        bottom: 24px;
         left: 50%;
         transform: translateX(-50%);
-        width: min(720px, 90vw);
+        width: min(750px, 92vw);
         background: {palette['panel']};
-        border: 1px solid {palette['accent_soft']};
-        border-radius: 18px;
-        box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
+        border: 2px solid {palette['accent_soft']};
+        border-radius: 24px;
+        box-shadow: 0 20px 48px rgba(15, 23, 42, 0.15);
         z-index: 1010;
     }}
+    
     div[data-testid="stChatInput"] textarea {{
-        min-height: 80px !important;
+        min-height: 60px !important;
+        border-radius: 20px !important;
+        font-size: 1em !important;
     }}
+
+    #chat-history {{
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }}
+
+    .message {{
+        border-radius: 16px;
+        padding: 14px 18px;
+        line-height: 1.5;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+    }}
+
+    .message strong {{
+        font-weight: 600;
+    }}
+
+    .message.user-message {{
+        background: rgba(59, 130, 246, 0.12);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        align-self: flex-end;
+    }}
+
+    .message.ai-message {{
+        background: {palette['panel']};
+        border: 1px solid {palette['accent_soft']};
+    }}
+
+    .message.ai-message.error {{
+        border-color: #dc2626;
+        background: rgba(248, 113, 113, 0.12);
+    }}
+
+    .message.ai-message.emergency {{
+        border-color: #dc2626;
+        background: rgba(248, 113, 113, 0.15);
+    }}
+
+    .message.ai-message.alert {{
+        border-color: #f59e0b;
+        background: rgba(251, 191, 36, 0.12);
+    }}
+    
+    /* Sidebar moderna */
+    section[data-testid="stSidebar"] {{
+        background: {palette['panel']} !important;
+        border-right: 1px solid {palette['accent_soft']};
+    }}
+    
+    section[data-testid="stSidebar"] > div {{
+        background: {palette['panel']} !important;
+    }}
+    
+    /* Animações suaves */
+    * {{
+        transition: background-color 0.3s ease, border-color 0.3s ease;
+    }}
+    
+    /* Espaçamento */
     .stChatMessageContainer {{
-        padding-bottom: 220px !important;
+        padding-bottom: 240px !important;
     }}
+    
     main .block-container {{
-        padding-bottom: 260px !important;
+        padding-bottom: 280px !important;
+        padding-top: 2rem !important;
     }}
     </style>
     """
@@ -1754,6 +1955,93 @@ def generate_tts_audio(text: str, language: str = "pt") -> Optional[bytes]:
         return None
 
 
+class GeminiVoiceAgent:
+    """Wrapper simples para acionar o Gemini AI Studio com audio."""
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model_name: str = DEFAULT_GEMINI_MODEL,
+    ) -> None:
+        self.api_key = api_key or DEFAULT_GEMINI_API_KEY
+        self.model_name = model_name
+        self._model: Optional[Any] = None
+        self.last_error: Optional[str] = None
+
+    def available(self) -> bool:
+        return bool(self.api_key and genai is not None)
+
+    def _ensure_model(self) -> None:
+        if not self.available():
+            raise RuntimeError(
+                "Gemini Voice Agent indisponivel (biblioteca ou chave ausente)."
+            )
+        if self._model is None:
+            genai.configure(api_key=self.api_key)
+            self._model = genai.GenerativeModel(
+                model_name=self.model_name,
+                system_instruction=VOICE_AGENT_INSTRUCTIONS,
+            )
+
+    def transcribe_and_respond(
+        self,
+        *,
+        audio: bytes,
+        mime_type: str = "audio/wav",
+    ) -> Dict[str, Any]:
+        self._ensure_model()
+        start = time.time()
+        try:
+            response = self._model.generate_content(
+                [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {"mime_type": mime_type, "data": audio},
+                            {"text": VOICE_AGENT_RESPONSE_SCHEMA},
+                        ],
+                    }
+                ],
+                generation_config={
+                    "temperature": 0.5,
+                    "top_p": 0.95,
+                    "max_output_tokens": 1024,
+                    "response_mime_type": "application/json",
+                },
+                request_options={"timeout": 60},
+            )
+        except Exception as exc:
+            self.last_error = str(exc)
+            raise
+        latency = time.time() - start
+        raw_text = getattr(response, "text", "") or ""
+        try:
+            payload = json.loads(raw_text)
+        except json.JSONDecodeError:
+            payload = {
+                "transcription": raw_text.strip(),
+                "assistant_reply": raw_text.strip(),
+            }
+        transcription = (payload.get("transcription") or "").strip()
+        assistant_reply = (payload.get("assistant_reply") or "").strip()
+        return {
+            "transcription": transcription,
+            "assistant_reply": assistant_reply,
+            "latency": latency,
+            "raw": raw_text,
+        }
+
+
+def get_voice_agent() -> Optional[GeminiVoiceAgent]:
+    if genai is None:
+        return None
+    agent = st.session_state.get("voice_agent")
+    if not isinstance(agent, GeminiVoiceAgent):
+        st.session_state.voice_agent = GeminiVoiceAgent()
+        agent = st.session_state.voice_agent
+    return agent
+
+
 def render_sidebar() -> None:
     with st.sidebar:
         st.header("Fluxos auxiliares")
@@ -2042,7 +2330,7 @@ def render_sidebar() -> None:
         if selected_category != "Selecione":
             for rec in EDUCATION_LIBRARY[selected_category]:
                 st.markdown(
-                    f"* `{selected_category}` -> **{rec["title"]}** ({rec["type"]})"
+                    f"* `{selected_category}` -> **{rec['title']}** ({rec['type']})"
                 )
 
         st.markdown("---")
@@ -2157,6 +2445,134 @@ def render_sidebar() -> None:
                     st.text(record["summary"])
 
 
+def render_voice_agent_panel() -> None:
+    st.markdown(
+        """
+        <div class='themed-panel' style='text-align:center; background: linear-gradient(120deg, rgba(99,102,241,0.12), rgba(6,182,212,0.12));'>
+            <h3 style='margin-bottom:0.3em;'>🎤 MedIA Voz com Gemini</h3>
+            <p style='font-size:0.95em; color:#475569; margin:0 auto; max-width:520px;'>
+                Grave uma mensagem curta e deixe o Gemini AI Studio transcrever e responder em tempo real.
+                A transcrição é enviada para o chat principal para manter todo mundo sincronizado.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if genai is None:
+        st.warning(
+            "Instale o SDK oficial com `pip install google-generativeai` para habilitar o agente de voz."
+        )
+        return
+
+    agent = get_voice_agent()
+    if agent is None or not agent.available():
+        st.warning(
+            "Configure a variavel `GEMINI_API_KEY` (ou use a integrada no codigo) para habilitar o agente de voz."
+        )
+        return
+
+    audio_file = st.audio_input(
+        "Grave sua pergunta (max. 30s). Toque no microfone, aguarde e clique em 'Enviar voz'.",
+        key="voice_audio_input",
+    )
+    send_col, clear_col = st.columns([3, 1])
+    with send_col:
+        send_voice = st.button(
+            "Enviar mensagem de voz",
+            key="send_voice_button",
+            use_container_width=True,
+        )
+    with clear_col:
+        if st.button(
+            "Limpar voz",
+            key="clear_voice_history",
+            use_container_width=True,
+        ):
+            st.session_state.voice_conversation = []
+            st.session_state.voice_agent_status = "Histórico de voz reiniciado."
+            st.success("Histórico do agente de voz limpo.")
+
+    if send_voice:
+        if audio_file is None:
+            st.warning("Grave uma mensagem antes de enviar.")
+        else:
+            audio_bytes = audio_file.getvalue()
+            mime_type = audio_file.type or "audio/wav"
+            try:
+                with st.spinner("Conversando com o Gemini..."):
+                    result = agent.transcribe_and_respond(
+                        audio=audio_bytes,
+                        mime_type=mime_type,
+                    )
+            except Exception as exc:
+                st.session_state.voice_agent_status = f"Erro ao acionar Gemini: {exc}"
+                st.error(
+                    "Não foi possível entender o áudio agora. Verifique a conexão e tente novamente."
+                )
+            else:
+                transcript = result.get("transcription", "")
+                reply = result.get("assistant_reply", "")
+                latency = result.get("latency", 0.0)
+                entry: Dict[str, Any] = {
+                    "patient": transcript,
+                    "agent": reply,
+                    "latency": latency,
+                }
+                audio_answer = generate_tts_audio(reply) if reply else None
+                if audio_answer:
+                    entry["audio"] = audio_answer
+                history = list(st.session_state.voice_conversation)
+                history.append(entry)
+                st.session_state.voice_conversation = history[-6:]
+                st.session_state.voice_agent_status = (
+                    f"Última resposta em {latency:.1f}s usando {agent.model_name}."
+                )
+                if transcript:
+                    st.session_state.pending_voice_input = transcript
+                    st.info("Transcrição enviada automaticamente para o chat principal.")
+
+    if st.session_state.voice_agent_status:
+        st.caption(st.session_state.voice_agent_status)
+
+    if not st.session_state.voice_conversation:
+        st.caption("Interaja por voz para ver transcrições e respostas aqui.")
+        return
+
+    st.markdown("#### Histórico de voz")
+    for idx, item in enumerate(reversed(st.session_state.voice_conversation), start=1):
+        st.markdown(
+            f"""
+            <div class='themed-panel' style='padding:16px; margin-bottom:8px; text-align:left;'>
+                <div style='font-size:0.85em; color:#94a3b8;'>Interação #{len(st.session_state.voice_conversation) - idx + 1}</div>
+                <p><strong>Paciente:</strong> {item.get('patient', '---')}</p>
+                <p><strong>MedIA Voz:</strong> {item.get('agent', '---')}</p>
+                <p style='font-size:0.85em; color:#94a3b8;'>Latência: {item.get('latency', 0.0):.1f}s</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if item.get("audio"):
+            st.audio(item["audio"], format="audio/mp3")
+
+
+def render_quick_prompt_bar() -> None:
+    if not QUICK_PROMPTS:
+        return
+    st.markdown("#### Sugestoes rapidas")
+    st.caption("Clique em um atalho para preencher o chat com uma pergunta comum.")
+    columns = st.columns(len(QUICK_PROMPTS))
+    triggered_label: Optional[str] = None
+    for idx, prompt in enumerate(QUICK_PROMPTS):
+        label = prompt["label"]
+        text = prompt["text"]
+        if columns[idx].button(label, key=f"quick_prompt_{idx}"):
+            st.session_state.pending_voice_input = text
+            triggered_label = label
+    if triggered_label:
+        st.success(f"Atalho '{triggered_label}' enviado para o chat. Ajuste o texto antes de enviar se desejar.")
+
+
 def render_history() -> None:
     st.subheader("Respostas do MedIA")
     if st.session_state.history:
@@ -2188,9 +2604,14 @@ def main() -> None:
     apply_theme_settings()
     render_sidebar()
 
-    groq_api_key = st.secrets.get("GROQ_API_KEY")
+    groq_api_key = os.environ.get("GROQ_API_KEY")
     if not groq_api_key:
-        st.error("GROQ_API_KEY nao encontrado em st.secrets. Configure a chave ou defina a variavel de ambiente.")
+        try:
+            groq_api_key = st.secrets.get("GROQ_API_KEY")
+        except Exception:
+            pass
+    if not groq_api_key:
+        st.error("GROQ_API_KEY nao encontrado. Configure a chave nas variaveis de ambiente ou em st.secrets.")
         return
     default_model = "llama-3.3-70b-versatile"
     model_aliases = {
@@ -2198,8 +2619,12 @@ def main() -> None:
         "llama3-70b-8192": "llama-3.3-70b-versatile",
     }
     model = os.environ.get("GROQ_MODEL_NAME", "")
-    if not model and "GROQ_MODEL_NAME" in st.secrets:
-        model = st.secrets["GROQ_MODEL_NAME"]
+    if not model:
+        try:
+            if "GROQ_MODEL_NAME" in st.secrets:
+                model = st.secrets["GROQ_MODEL_NAME"]
+        except Exception:
+            pass
     original_model = model or default_model
     resolved_model = model_aliases.get(original_model, original_model)
     if resolved_model != original_model:
@@ -2238,13 +2663,17 @@ def main() -> None:
     )
 
     with triage_tab:
+        render_voice_agent_panel()
+        render_quick_prompt_bar()
+        st.markdown("<br>", unsafe_allow_html=True)
+
         render_history()
         st.markdown("""<script>
 const chat = document.getElementById(\'chat-history\');
 if (chat) { chat.scrollTop = chat.scrollHeight; }
 </script>""", unsafe_allow_html=True)
 
-        user_input = st.chat_input("Digite seus sintomas", key="user_input")
+        user_input = st.chat_input("💬 Digite seus sintomas ou faça uma pergunta médica...", key="user_input")
         if not user_input and st.session_state.pending_voice_input:
             user_input = st.session_state.pending_voice_input
             st.session_state.pending_voice_input = ""
@@ -2503,7 +2932,8 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
             confidence_result = st.session_state.confidence_calibrator.score(enriched_response, context_meta)
             st.session_state.confidence_history.append(confidence_result)
             final_response = (
-                f"{enriched_response}\n\n""
+                f"{enriched_response}\n\nConfianca estimada: {confidence_result['label']} "
+                f"({confidence_result['score']})."
             )
 
             education_hits = st.session_state.education_manager.recommend_from_text(
