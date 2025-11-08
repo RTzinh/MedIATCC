@@ -2146,263 +2146,289 @@ def render_sidebar() -> None:
             adjust_memory_window(memory_window)
 
         st.markdown("---")
-        with st.expander("Dados do paciente", expanded=True):
-            demographics = st.session_state.get("demographics")
-            if not isinstance(demographics, dict):
-                demographics = {}
-            current_history = demographics.get("history")
-            if not isinstance(current_history, dict):
-                current_history = {}
+        st.caption("Painel lateral reservado para ajustes/debug. Use o painel da direita para dados do paciente.")
 
-            age_default = demographics.get("age")
-            age_input = st.number_input(
-                "Idade (anos)",
-                min_value=0,
-                max_value=120,
-                value=int(age_default) if isinstance(age_default, (int, float)) and age_default > 0 else 0,
-                step=1,
-            )
 
-            sex_options = ["Selecione", "F", "M", "Outro"]
-            current_sex = demographics.get("sex")
-            sex_index = sex_options.index(current_sex) if current_sex in sex_options else 0
-            sex_input = st.selectbox("Sexo", options=sex_options, index=sex_index)
+def render_patient_panel() -> None:
+    st.markdown("### Dados do paciente")
+    demographics = st.session_state.get("demographics")
+    if not isinstance(demographics, dict):
+        demographics = {}
+    current_history = demographics.get("history")
+    if not isinstance(current_history, dict):
+        current_history = {}
 
-            weight_default = demographics.get("weight_kg") or 0.0
-            height_default = demographics.get("height_cm") or 0.0
-            weight_input = st.number_input(
-                "Peso (kg)",
-                min_value=0.0,
-                max_value=400.0,
-                value=float(weight_default),
-                step=0.5,
-                format="%.1f",
-            )
-            height_input = st.number_input(
-                "Altura (cm)",
-                min_value=0.0,
-                max_value=250.0,
-                value=float(height_default),
-                step=0.5,
-                format="%.1f",
-            )
-            bmi_value: Optional[float] = None
-            if weight_input > 0 and height_input > 0:
-                bmi_value = weight_input / ((height_input / 100) ** 2)
-                st.caption(f"IMC calculado: {bmi_value:.1f}")
+    age_default = demographics.get("age")
+    age_input = st.number_input(
+        "Idade (anos)",
+        min_value=0,
+        max_value=120,
+        value=int(age_default) if isinstance(age_default, (int, float)) and age_default > 0 else 0,
+        step=1,
+    )
 
-            pregnancy_status = demographics.get("pregnancy_status")
-            if sex_input == "F":
-                pregnancy_options = ["Nao", "Primeiro trimestre", "Segundo trimestre", "Terceiro trimestre"]
-                pregnancy_index = pregnancy_options.index(pregnancy_status) if pregnancy_status in pregnancy_options else 0
-                pregnancy_status = st.selectbox("Gestacao atual", options=pregnancy_options, index=pregnancy_index)
-            else:
-                pregnancy_status = None
+    sex_options = ["Selecione", "F", "M", "Outro"]
+    current_sex = demographics.get("sex")
+    sex_index = sex_options.index(current_sex) if current_sex in sex_options else 0
+    sex_input = st.selectbox("Sexo", options=sex_options, index=sex_index)
 
-            smoking_options = ["Nao fumante", "Ex-fumante", "Fumante atual"]
-            current_smoke = demographics.get("smoking_status")
-            smoke_index = smoking_options.index(current_smoke) if current_smoke in smoking_options else 0
-            smoking_status = st.selectbox("Tabagismo", options=smoking_options, index=smoke_index)
+    weight_default = demographics.get("weight_kg") or 0.0
+    height_default = demographics.get("height_cm") or 0.0
+    weight_input = st.number_input(
+        "Peso (kg)",
+        min_value=0.0,
+        max_value=400.0,
+        value=float(weight_default),
+        step=0.5,
+        format="%.1f",
+    )
+    height_input = st.number_input(
+        "Altura (cm)",
+        min_value=0.0,
+        max_value=250.0,
+        value=float(height_default),
+        step=0.5,
+        format="%.1f",
+    )
+    bmi_value: Optional[float] = None
+    if weight_input > 0 and height_input > 0:
+        bmi_value = weight_input / ((height_input / 100) ** 2)
+        st.caption(f"IMC calculado: {bmi_value:.1f}")
 
-            st.caption("Condicoes clinicas relevantes")
-            history_labels = {
-                "congestive_heart_failure": "Insuficiencia cardiaca",
-                "hypertension": "Hipertensao",
-                "stroke_tia": "AVE/AIT previo",
-                "diabetes": "Diabetes",
-                "vascular_disease": "Doenca vascular",
-            }
-            updated_history: Dict[str, bool] = {}
-            for key, label in history_labels.items():
-                updated_history[key] = st.checkbox(
-                    label,
-                    value=bool(current_history.get(key)),
-                    key=f"history_{key}",
-                )
+    pregnancy_status = demographics.get("pregnancy_status")
+    if sex_input == "F":
+        pregnancy_options = ["Nao", "Primeiro trimestre", "Segundo trimestre", "Terceiro trimestre"]
+        pregnancy_index = pregnancy_options.index(pregnancy_status) if pregnancy_status in pregnancy_options else 0
+        pregnancy_status = st.selectbox("Gestacao atual", options=pregnancy_options, index=pregnancy_index)
+    else:
+        pregnancy_status = None
 
-            st.caption("Pressao arterial (opcional)")
-            blood_pressure = demographics.get("blood_pressure")
-            if not isinstance(blood_pressure, dict):
-                blood_pressure = {}
-            systolic_input = st.number_input(
-                "Pressao sistolica",
-                min_value=0,
-                max_value=250,
-                value=int(blood_pressure.get("systolic", 0) or 0),
-                step=1,
-            )
-            diastolic_input = st.number_input(
-                "Pressao diastolica",
-                min_value=0,
-                max_value=160,
-                value=int(blood_pressure.get("diastolic", 0) or 0),
-                step=1,
-            )
+    smoking_options = ["Nao fumante", "Ex-fumante", "Fumante atual"]
+    current_smoke = demographics.get("smoking_status")
+    smoke_index = smoking_options.index(current_smoke) if current_smoke in smoking_options else 0
+    smoking_status = st.selectbox("Tabagismo", options=smoking_options, index=smoke_index)
 
-            notes_input = st.text_area(
-                "Outras informacoes clinicas (opcional)",
-                value=str(demographics.get("notes") or ""),
-                height=80,
-            )
-
-            processed_demo = {
-                key: value
-                for key, value in demographics.items()
-                if key
-                not in {
-                    "age",
-                    "sex",
-                    "history",
-                    "blood_pressure",
-                    "notes",
-                    "weight_kg",
-                    "height_cm",
-                    "bmi",
-                    "pregnancy_status",
-                    "smoking_status",
-                }
-            }
-            processed_demo["history"] = updated_history
-            processed_demo["notes"] = notes_input.strip() or None
-            processed_demo["age"] = int(age_input) if age_input > 0 else None
-            processed_demo["sex"] = sex_input if sex_input != "Selecione" else None
-            processed_demo["weight_kg"] = round(weight_input, 1) if weight_input > 0 else None
-            processed_demo["height_cm"] = round(height_input, 1) if height_input > 0 else None
-            processed_demo["smoking_status"] = smoking_status
-            if pregnancy_status and pregnancy_status != "Nao":
-                processed_demo["pregnancy_status"] = pregnancy_status
-            else:
-                processed_demo.pop("pregnancy_status", None)
-            if bmi_value:
-                processed_demo["bmi"] = round(bmi_value, 1)
-            else:
-                processed_demo.pop("bmi", None)
-
-            if systolic_input > 0 and diastolic_input > 0:
-                processed_demo["blood_pressure"] = {
-                    "systolic": int(systolic_input),
-                    "diastolic": int(diastolic_input),
-                }
-            else:
-                processed_demo.pop("blood_pressure", None)
-
-            if not processed_demo["notes"]:
-                processed_demo.pop("notes", None)
-            if not processed_demo["weight_kg"]:
-                processed_demo.pop("weight_kg", None)
-            if not processed_demo["height_cm"]:
-                processed_demo.pop("height_cm", None)
-
-            if processed_demo != demographics:
-                st.session_state.demographics = processed_demo
-                refresh_multiexam_reasoning()
-                st.success("Dados demograficos atualizados.")
-
-        if st.session_state.symptom_log:
-            with st.expander("Resumo rapido de sintomas", expanded=False):
-                st.caption("Sintomas mais recentes registrados automaticamente.")
-                st.write(summarize_symptom_log(st.session_state.symptom_log))
-                if st.button("Limpar sintomas", key="clear_symptoms_sidebar"):
-                    st.session_state.symptom_log = []
-                    st.success("Sintomas resetados para esta sessao.")
-
-        exam_files = st.file_uploader(
-            "Envie exames estruturados (PDF, CSV, HL7, imagem)",
-            type=["pdf", "csv", "hl7", "json", "txt", "png", "jpg", "jpeg"],
-            accept_multiple_files=True,
+    st.caption("Condicoes clinicas relevantes")
+    history_labels = {
+        "congestive_heart_failure": "Insuficiencia cardiaca",
+        "hypertension": "Hipertensao",
+        "stroke_tia": "AVE/AIT previo",
+        "diabetes": "Diabetes",
+        "vascular_disease": "Doenca vascular",
+    }
+    updated_history: Dict[str, bool] = {}
+    for key, label in history_labels.items():
+        updated_history[key] = st.checkbox(
+            label,
+            value=bool(current_history.get(key)),
+            key=f"history_{key}",
         )
-        if exam_files:
-            for exam in exam_files:
-                raw_bytes = exam.getvalue()
-                exam.seek(0)
-                result = st.session_state.exam_pipeline.process(exam)
-                if result and result["id"] not in st.session_state.exam_ids:
-                    st.session_state.exam_findings.append(result)
-                    st.session_state.exam_ids.add(result["id"])
-                    lab_engine = st.session_state.get("lab_interpreter")
-                    if lab_engine and result["id"] not in st.session_state.advanced_lab_ids:
-                        advanced = lab_engine.ingest_exam(
-                            result,
-                            lab_ranges=LAB_RANGES,
-                            demographics=st.session_state.get("demographics"),
-                        )
-                        if advanced:
-                            st.session_state.advanced_lab_findings.append(advanced)
-                            st.session_state.advanced_lab_ids.add(result["id"])
-                    ecg_engine = st.session_state.get("ecg_interpreter")
-                    if (
-                        ecg_engine
-                        and result["id"] not in st.session_state.ecg_ids
-                        and raw_bytes
-                    ):
-                        insight = ecg_engine.analyze_bytes(exam=result, content=raw_bytes)
-                        if insight:
-                            st.session_state.ecg_insights.append(insight)
-                            st.session_state.ecg_ids.add(result["id"])
 
-        if st.session_state.exam_findings:
-            with st.expander("Exames processados", expanded=False):
-                for item in st.session_state.exam_findings:
-                    st.markdown(f"**{item['name']}**")
-                    if item["normalized"]:
-                        st.json(item["normalized"])
-                    elif item["raw_text"]:
-                        st.text(item["raw_text"])
-                    if item["notes"]:
-                        st.caption("; ".join(item["notes"]))
+    st.caption("Pressao arterial (opcional)")
+    blood_pressure = demographics.get("blood_pressure")
+    if not isinstance(blood_pressure, dict):
+        blood_pressure = {}
+    systolic_input = st.number_input(
+        "Pressao sistolica",
+        min_value=0,
+        max_value=250,
+        value=int(blood_pressure.get("systolic", 0) or 0),
+        step=1,
+    )
+    diastolic_input = st.number_input(
+        "Pressao diastolica",
+        min_value=0,
+        max_value=160,
+        value=int(blood_pressure.get("diastolic", 0) or 0),
+        step=1,
+    )
 
-        imaging_files = st.file_uploader(
-            "Radiografias (JPG, PNG, DICOM zip)",
-            type=["png", "jpg", "jpeg", "zip", "dcm"],
-            accept_multiple_files=True,
-        )
-        if imaging_files:
-            for img in imaging_files:
-                raw_bytes = img.getvalue()
-                img.seek(0)
-                result = st.session_state.radiography_service.analyze(img)
-                if result and result["id"] not in st.session_state.imaging_ids:
-                    st.session_state.imaging_findings.append(result)
-                    st.session_state.imaging_ids.add(result["id"])
-                    explain_note = st.session_state.explainability_engine.generate(result)
-                    st.session_state.explainability_notes.append(explain_note)
-                    dicom_engine = st.session_state.get("dicom_analyzer")
-                    if dicom_engine and result["id"] not in st.session_state.dicom_ids:
-                        dicom_payload = dicom_engine.analyze_bytes(
-                            file_id=result["id"],
-                            content=raw_bytes,
-                        )
-                        if dicom_payload:
-                            st.session_state.dicom_findings.append(dicom_payload)
-                            st.session_state.dicom_ids.add(result["id"])
+    notes_input = st.text_area(
+        "Outras informacoes clinicas (opcional)",
+        value=str(demographics.get("notes") or ""),
+        height=80,
+    )
+
+    processed_demo = {
+        key: value
+        for key, value in demographics.items()
+        if key
+        not in {
+            "age",
+            "sex",
+            "history",
+            "blood_pressure",
+            "notes",
+            "weight_kg",
+            "height_cm",
+            "bmi",
+            "pregnancy_status",
+            "smoking_status",
+        }
+    }
+    processed_demo["history"] = updated_history
+    processed_demo["notes"] = notes_input.strip() or None
+    processed_demo["age"] = int(age_input) if age_input > 0 else None
+    processed_demo["sex"] = sex_input if sex_input != "Selecione" else None
+    processed_demo["weight_kg"] = round(weight_input, 1) if weight_input > 0 else None
+    processed_demo["height_cm"] = round(height_input, 1) if height_input > 0 else None
+    processed_demo["smoking_status"] = smoking_status
+    if pregnancy_status and pregnancy_status != "Nao":
+        processed_demo["pregnancy_status"] = pregnancy_status
+    else:
+        processed_demo.pop("pregnancy_status", None)
+    if bmi_value:
+        processed_demo["bmi"] = round(bmi_value, 1)
+    else:
+        processed_demo.pop("bmi", None)
+
+    if systolic_input > 0 and diastolic_input > 0:
+        processed_demo["blood_pressure"] = {
+            "systolic": int(systolic_input),
+            "diastolic": int(diastolic_input),
+        }
+    else:
+        processed_demo.pop("blood_pressure", None)
+
+    if not processed_demo["notes"]:
+        processed_demo.pop("notes", None)
+    if not processed_demo["weight_kg"]:
+        processed_demo.pop("weight_kg", None)
+    if not processed_demo["height_cm"]:
+        processed_demo.pop("height_cm", None)
+
+    if processed_demo != demographics:
+        st.session_state.demographics = processed_demo
         refresh_multiexam_reasoning()
+        st.success("Dados demograficos atualizados.")
 
-        if st.session_state.imaging_findings:
-            with st.expander("Achados de radiografia", expanded=False):
-                for item in st.session_state.imaging_findings:
-                    st.markdown(f"**{item['name']}**")
-                    st.json(item["payload"])
-                    if item["notes"]:
-                        st.caption("; ".join(item["notes"]))
+    if st.session_state.symptom_log:
+        with st.expander("Resumo rapido de sintomas", expanded=False):
+            st.caption("Sintomas mais recentes registrados automaticamente.")
+            st.write(summarize_symptom_log(st.session_state.symptom_log))
+            if st.button("Limpar sintomas", key="clear_symptoms_panel"):
+                st.session_state.symptom_log = []
+                st.success("Sintomas resetados para esta sessao.")
 
-        if st.session_state.explainability_notes:
-            with st.expander("Explicabilidade visual", expanded=False):
-                for note in st.session_state.explainability_notes[-5:]:
-                    st.write("- " + note)
+    st.markdown("---")
+    st.subheader("Arquivos clinicos")
+    exam_files = st.file_uploader(
+        "Envie exames estruturados (PDF, CSV, HL7, imagem)",
+        type=["pdf", "csv", "hl7", "json", "txt", "png", "jpg", "jpeg"],
+        accept_multiple_files=True,
+    )
+    if exam_files:
+        for exam in exam_files:
+            raw_bytes = exam.getvalue()
+            exam.seek(0)
+            result = st.session_state.exam_pipeline.process(exam)
+            if result and result["id"] not in st.session_state.exam_ids:
+                st.session_state.exam_findings.append(result)
+                st.session_state.exam_ids.add(result["id"])
+                lab_engine = st.session_state.get("lab_interpreter")
+                if lab_engine and result["id"] not in st.session_state.advanced_lab_ids:
+                    advanced = lab_engine.ingest_exam(
+                        result,
+                        lab_ranges=LAB_RANGES,
+                        demographics=st.session_state.get("demographics"),
+                    )
+                    if advanced:
+                        st.session_state.advanced_lab_findings.append(advanced)
+                        st.session_state.advanced_lab_ids.add(result["id"])
+                ecg_engine = st.session_state.get("ecg_interpreter")
+                if (
+                    ecg_engine
+                    and result["id"] not in st.session_state.ecg_ids
+                    and raw_bytes
+                ):
+                    insight = ecg_engine.analyze_bytes(exam=result, content=raw_bytes)
+                    if insight:
+                        st.session_state.ecg_insights.append(insight)
+                        st.session_state.ecg_ids.add(result["id"])
 
-        st.markdown("---")
-        st.subheader("Educacao personalizada")
-        render_education_cards()
-        selected_category = st.selectbox(
-            "Explorar categoria manualmente",
-            options=["Selecione"] + st.session_state.education_manager.list_categories(),
-            index=0,
-        )
-        if selected_category != "Selecione":
-            for rec in EDUCATION_LIBRARY[selected_category]:
-                st.markdown(
-                    f"* `{selected_category}` -> **{rec['title']}** ({rec['type']})"
-                )
+    if st.session_state.exam_findings:
+        with st.expander("Exames processados", expanded=False):
+            for item in st.session_state.exam_findings:
+                st.markdown(f"**{item['name']}**")
+                if item["normalized"]:
+                    st.json(item["normalized"])
+                elif item["raw_text"]:
+                    st.text(item["raw_text"])
+                if item["notes"]:
+                    st.caption("; ".join(item["notes"]))
+
+    imaging_files = st.file_uploader(
+        "Radiografias (JPG, PNG, DICOM zip)",
+        type=["png", "jpg", "jpeg", "zip", "dcm"],
+        accept_multiple_files=True,
+        key="imaging_upload_panel",
+    )
+    if imaging_files:
+        for img in imaging_files:
+            raw_bytes = img.getvalue()
+            img.seek(0)
+            result = st.session_state.radiography_service.analyze(img)
+            if result and result["id"] not in st.session_state.imaging_ids:
+                st.session_state.imaging_findings.append(result)
+                st.session_state.imaging_ids.add(result["id"])
+                explain_note = st.session_state.explainability_engine.generate(result)
+                st.session_state.explainability_notes.append(explain_note)
+                dicom_engine = st.session_state.get("dicom_analyzer")
+                if dicom_engine and result["id"] not in st.session_state.dicom_ids:
+                    dicom_payload = dicom_engine.analyze_bytes(
+                        file_id=result["id"],
+                        content=raw_bytes,
+                    )
+                    if dicom_payload:
+                        st.session_state.dicom_findings.append(dicom_payload)
+                        st.session_state.dicom_ids.add(result["id"])
+    refresh_multiexam_reasoning()
+
+    if st.session_state.imaging_findings:
+        with st.expander("Achados de radiografia", expanded=False):
+            for item in st.session_state.imaging_findings:
+                st.markdown(f"**{item['name']}**")
+                st.json(item["payload"])
+                if item["notes"]:
+                    st.caption("; ".join(item["notes"]))
+
+    if st.session_state.explainability_notes:
+        with st.expander("Explicabilidade visual", expanded=False):
+            for note in st.session_state.explainability_notes[-5:]:
+                st.write("- " + note)
+
+    st.markdown("---")
+    st.subheader("Relatorio final")
+    final_summary = st.session_state.printable_summary or build_symptom_report()
+    st.text_area(
+        "Resumo consolidado",
+        value=final_summary,
+        height=180,
+        disabled=True,
+    )
+    st.download_button(
+        "Baixar relatorio (.txt)",
+        data=final_summary.encode("utf-8"),
+        file_name="relatorio_medIA.txt",
+        mime="text/plain",
+    )
+    hackathon_report = st.session_state.get("hackathon_triage_report")
+    if hackathon_report:
+        with st.expander("Ver relatorio detalhado do Hackathon"):
+            report_dict = hackathon_report.to_dict() if hasattr(hackathon_report, "to_dict") else hackathon_report
+            st.json(report_dict)
+
+    st.markdown("---")
+    st.subheader("Educacao personalizada")
+    render_education_cards()
+    selected_category = st.selectbox(
+        "Explorar categoria manualmente",
+        options=["Selecione"] + st.session_state.education_manager.list_categories(),
+        index=0,
+    )
+    if selected_category != "Selecione":
+        for rec in EDUCATION_LIBRARY[selected_category]:
+            st.markdown(f"* `{selected_category}` -> **{rec['title']}** ({rec['type']})")
 
         st.markdown("---")
         st.subheader("Ficha para imprimir")
@@ -2827,26 +2853,7 @@ def render_history() -> None:
         )
 
 
-def main() -> None:
-    st.set_page_config(
-        page_title="MedIA",
-        page_icon="🩺",
-        layout="centered",
-    )
-
-    st.title("MedIA")
-    if _groq_import_error is not None:
-        st.error(
-            "O SDK `groq` nao foi encontrado. Instale-o com `pip install groq` para usar a integracao com o modelo."
-        )
-        st.code(str(_groq_import_error))
-        return
-
-    ensure_session_defaults()
-    register_external_services()
-    apply_theme_settings()
-    render_sidebar()
-
+def render_primary_workspace() -> None:
     groq_api_key = os.environ.get("GROQ_API_KEY")
     if not groq_api_key:
         try:
@@ -2871,7 +2878,7 @@ def main() -> None:
     original_model = model or default_model
     resolved_model = model_aliases.get(original_model, original_model)
     if resolved_model != original_model:
-        st.warning(
+        st.info(
             f"Modelo '{original_model}' foi substituido automaticamente por '{resolved_model}'. "
             "Atualize GROQ_MODEL_NAME para evitar esta mensagem."
         )
@@ -2917,7 +2924,7 @@ def main() -> None:
 
         render_history()
         st.markdown("""<script>
-const chat = document.getElementById(\'chat-history\');
+const chat = document.getElementById('chat-history');
 if (chat) { chat.scrollTop = chat.scrollHeight; }
 </script>""", unsafe_allow_html=True)
 
@@ -3069,75 +3076,23 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
             medication_alerts = st.session_state.med_checker.check(user_input)
             if medication_alerts:
                 st.session_state.medication_alerts.extend(medication_alerts)
-                st.session_state.history.append(
-                    "<div class='message ai-message alert'><strong>MedIA:</strong> "
-                    + " ".join(medication_alerts)
-                    + "</div>"
-                )
 
-            planner_state = st.session_state.conversation_planner.plan(
-                user_text=user_input,
-                state={
-                    "exam_findings": st.session_state.exam_findings,
-                    "imaging_findings": st.session_state.imaging_findings,
-                    "wearable_payload": st.session_state.wearable_payload,
-                },
-            )
-            st.session_state.planner_state = planner_state
-
-            fusion_data = st.session_state.fusion_engine.fuse(
-                user_text=user_input,
-                exam_findings=st.session_state.exam_findings,
-                imaging_findings=st.session_state.imaging_findings,
-                wearable_payload=st.session_state.wearable_payload,
-            )
-            st.session_state.multimodal_signature = fusion_data
-
-            if st.session_state.triage_mode and not is_direct_query:
-                progress = st.session_state.question_progress
-                history = progress.setdefault("history", [])
-                if len(history) < progress["total"]:
-                    history.extend([""] * (progress["total"] - len(history)))
-                current = progress.get("current", 1)
-                if 1 <= current <= progress["total"] and history[current - 1]:
-                    progress["answered"] = max(progress["answered"], current)
-                progress["answered"] = min(progress["answered"], progress["total"])
-                progress["current"] = min(progress["answered"] + 1, progress["total"])
-                st.session_state.question_progress = progress
-            elif not st.session_state.triage_mode:
-                reset_question_progress()
-
-            context_payload, context_meta = build_context_sections()
-            request_type = (
-                "pergunta direta"
-                if is_direct_query
-                else ("fluxo de triagem" if st.session_state.triage_mode else "conversa geral")
-            )
-            meta_lines = [
-                f"Status da triagem: {'ativo' if st.session_state.triage_mode else 'inativo'}",
-                f"Tipo de interacao: {request_type}",
-            ]
-            meta_block = "\n".join(meta_lines)
-            composed_input = meta_block + "\n\nEntrada do paciente: " + user_input
-            if context_payload:
-                composed_input = f"{context_payload}\n\n{meta_block}\n\nEntrada do paciente: {user_input}"
-
-            append_memory_message("user", composed_input)
+            append_memory_message("user", user_input)
+            composed_input, context_meta = prepare_context_for_model(user_input, medication_alerts=medication_alerts)
             model_messages = build_model_messages(system_prompt)
-            model_error_context = {}
+            model_messages.append({"role": "user", "content": composed_input})
+
             try:
                 response = predict_with_fallback(groq_client, model, model_messages)
                 append_memory_message("assistant", response)
             except BadRequestError as exc:
                 pop_last_memory_message()
                 error_text = str(exc)
-                model_error_context = {}
-                if "model_decommissioned" in error_text:
+                model_error_context = {"type": "unknown", "detail": error_text}
+                if "is not supported" in error_text.lower():
                     friendly = (
-                        "MedIA: o modelo configurado foi descontinuado. "
-                        "Defina `GROQ_MODEL_NAME` para um modelo suportado como "
-                        "`llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, ou outro da lista atual da Groq "
-                        "e tente novamente."
+                        "MedIA: o modelo configurado não está disponível. "
+                        "Atualize o nome do modelo no .env ou nas variáveis de ambiente."
                     )
                     st.error(
                         "Modelo Groq configurado foi descontinuado. Atualize `GROQ_MODEL_NAME` para um modelo suportado "
@@ -3180,8 +3135,9 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
             confidence_result = st.session_state.confidence_calibrator.score(enriched_response, context_meta)
             st.session_state.confidence_history.append(confidence_result)
             final_response = (
-                f"{enriched_response}\n\nConfianca estimada: {confidence_result['label']} "
-                f"({confidence_result['score']})."
+                f"{enriched_response}\n\n"
+                f"_Confianca estimada na resposta: {confidence_result['label']} "
+                f"({confidence_result['score']})._"
             )
 
             education_hits = st.session_state.education_manager.recommend_from_text(
@@ -3249,6 +3205,35 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
         """,
         unsafe_allow_html=True,
     )
+
+def main() -> None:
+    st.set_page_config(
+        page_title="MedIA",
+        page_icon="🩺",
+        layout="centered",
+    )
+
+    st.title("MedIA")
+    if _groq_import_error is not None:
+        st.error(
+            "O SDK `groq` nao foi encontrado. Instale-o com `pip install groq` para usar a integracao com o modelo."
+        )
+        st.code(str(_groq_import_error))
+        return
+
+    ensure_session_defaults()
+    register_external_services()
+    apply_theme_settings()
+    render_sidebar()
+
+    main_col, patient_col = st.columns([3.0, 1.2], gap="large")
+
+    with patient_col:
+        render_patient_panel()
+
+    with main_col:
+        render_primary_workspace()
+
 
 
 if __name__ == "__main__":
