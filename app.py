@@ -44,9 +44,16 @@ except ImportError:  # pragma: no cover
     gTTS = None
 
 try:
-    import google.generativeai as genai  # type: ignore
+    from google import genai as google_genai  # type: ignore
+    from google.genai import types as google_genai_types  # type: ignore
 except ImportError:  # pragma: no cover
-    genai = None
+    google_genai = None
+    google_genai_types = None
+
+try:
+    import google.generativeai as legacy_genai  # type: ignore
+except ImportError:  # pragma: no cover
+    legacy_genai = None
 
 try:
     import qrcode  # type: ignore
@@ -72,6 +79,21 @@ except ModuleNotFoundError:  # pragma: no cover - optional integrations
 
     def get_cad_handler() -> Optional[Any]:
         return None
+
+try:
+    from hackathon import (
+        NursingTriageInput,
+        example_triage_payload,
+        generate_triage_report,
+    )
+except ModuleNotFoundError:  # pragma: no cover - optional module
+    NursingTriageInput = Any  # type: ignore
+
+    def example_triage_payload() -> Dict[str, Any]:  # type: ignore
+        return {}
+
+    def generate_triage_report(_: Any) -> Any:  # type: ignore
+        return {}
 
 def safe_show_image(image: Any, caption: Optional[str] = None, **kwargs: Any) -> None:
     """Wrapper to avoid Streamlit media cache errors when the file is missing."""
@@ -203,6 +225,43 @@ QUICK_PROMPTS = [
         "text": "Pode resumir nossa conversa e listar exames ou orientacoes que devo seguir nas proximas 24h?",
     },
 ]
+
+COMMON_CHRONIC_CONDITIONS = [
+    "Hipertensao",
+    "Diabetes",
+    "Asma",
+    "DPOC",
+    "Cardiopatia",
+    "Insuficiencia cardiaca",
+]
+COMMON_ALLERGIES = [
+    "Dipirona",
+    "Ibuprofeno",
+    "Amoxicilina",
+    "Penicilina",
+    "Losartana",
+]
+COMMON_MEDICATIONS = [
+    "Losartana 50mg",
+    "Metformina 850mg",
+    "AAS 100mg",
+    "Atorvastatina 20mg",
+]
+
+
+def parse_free_text_list(value: str) -> List[str]:
+    tokens = re.split(r"[,;\n]+", value or "")
+    return [item.strip() for item in tokens if item.strip()]
+
+
+def sanitize_numeric(value: float) -> Optional[float]:
+    if value and value > 0:
+        return float(value)
+    return None
+
+
+def gemini_sdk_available() -> bool:
+    return google_genai is not None or legacy_genai is not None
 
 
 CLINICAL_DISCLAIMER = (
@@ -497,6 +556,8 @@ def ensure_session_defaults() -> None:
         "triage_mode": False,
         "voice_conversation": [],
         "voice_agent_status": "",
+        "hackathon_triage_report": None,
+        "hackathon_triage_payload": {},
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -1881,6 +1942,23 @@ def build_context_sections() -> tuple[str, Dict[str, Any]]:
             + fusion_data["summary"]
             + f" Vetor={fusion_data.get('vector')}"
         )
+    hackathon_report = st.session_state.get("hackathon_triage_report")
+    hackathon_dict: Optional[Dict[str, Any]] = None
+    if hackathon_report:
+        if hasattr(hackathon_report, "to_dict"):
+            hackathon_dict = hackathon_report.to_dict()  # type: ignore[assignment]
+            summary = (
+                hackathon_report.summary_markdown()  # type: ignore[attr-defined]
+                if hasattr(hackathon_report, "summary_markdown")
+                else ""
+            )
+        else:
+            hackathon_dict = hackathon_report
+            summary = ""
+        if summary:
+            pieces.append("Triagem de enfermagem (Hackathon):\n" + summary)
+        elif hackathon_dict:
+            pieces.append("Triagem de enfermagem (Hackathon) disponivel para consulta.")
     context_payload = truncate_text("\n\n".join(pieces), limit=4000)
     context_meta = {
         "critical_flags": st.session_state.critical_events,
@@ -1895,6 +1973,7 @@ def build_context_sections() -> tuple[str, Dict[str, Any]]:
         "guideline_plan": guideline_plan,
         "planner_state": plan_state,
         "multimodal_signature": fusion_data,
+        "hackathon_triage": hackathon_dict,
     }
     return context_payload, context_meta
 
@@ -1922,23 +2001,35 @@ class GeminiVoiceAgent:
     ) -> None:
         self.api_key = api_key or DEFAULT_GEMINI_API_KEY
         self.model_name = model_name
-        self._model: Optional[Any] = None
+        self._client: Optional[Any] = None
+        self._legacy_model: Optional[Any] = None
         self.last_error: Optional[str] = None
 
     def available(self) -> bool:
-        return bool(self.api_key and genai is not None)
+        return bool(self.api_key and gemini_sdk_available())
 
-    def _ensure_model(self) -> None:
+    def _legacy_model_name(self) -> str:
+        if self.model_name.startswith("models/"):
+            return self.model_name.split("/", 1)[1]
+        return self.model_name
+
+    def _ensure_backend(self) -> None:
         if not self.available():
             raise RuntimeError(
                 "Gemini Voice Agent indisponivel (biblioteca ou chave ausente)."
             )
-        if self._model is None:
-            genai.configure(api_key=self.api_key)
-            self._model = genai.GenerativeModel(
-                model_name=self.model_name,
+        if self._client or self._legacy_model:
+            return
+        if google_genai is not None:
+            self._client = google_genai.Client(api_key=self.api_key)
+        elif legacy_genai is not None:
+            legacy_genai.configure(api_key=self.api_key)
+            self._legacy_model = legacy_genai.GenerativeModel(
+                model_name=self._legacy_model_name(),
                 system_instruction=VOICE_AGENT_INSTRUCTIONS,
             )
+        else:  # pragma: no cover
+            raise RuntimeError("SDK Gemini nao instalado.")
 
     def transcribe_and_respond(
         self,
@@ -1946,32 +2037,55 @@ class GeminiVoiceAgent:
         audio: bytes,
         mime_type: str = "audio/wav",
     ) -> Dict[str, Any]:
-        self._ensure_model()
+        self._ensure_backend()
         start = time.time()
         try:
-            response = self._model.generate_content(
-                [
-                    {
-                        "role": "user",
-                        "parts": [
-                            {"mime_type": mime_type, "data": audio},
-                            {"text": VOICE_AGENT_RESPONSE_SCHEMA},
-                        ],
-                    }
-                ],
-                generation_config={
-                    "temperature": 0.5,
-                    "top_p": 0.95,
-                    "max_output_tokens": 1024,
-                    "response_mime_type": "application/json",
-                },
-                request_options={"timeout": 60},
-            )
+            if self._client is not None and google_genai_types is not None:
+                prompt = (
+                    f"{VOICE_AGENT_INSTRUCTIONS}\n\n{VOICE_AGENT_RESPONSE_SCHEMA}\n"
+                    "Quando nao houver fala, informe explicitamente em portugues."
+                )
+                audio_part = google_genai_types.Part.from_bytes(
+                    data=audio,
+                    mime_type=mime_type,
+                )
+                response = self._client.models.generate_content(
+                    model=self.model_name,
+                    contents=[prompt, audio_part],
+                    config={
+                        "temperature": 0.4,
+                        "top_p": 0.9,
+                        "max_output_tokens": 1024,
+                        "response_mime_type": "application/json",
+                    },
+                )
+                raw_text = getattr(response, "text", "") or ""
+            elif self._legacy_model is not None:
+                response = self._legacy_model.generate_content(
+                    [
+                        {
+                            "role": "user",
+                            "parts": [
+                                {"mime_type": mime_type, "data": audio},
+                                {"text": VOICE_AGENT_RESPONSE_SCHEMA},
+                            ],
+                        }
+                    ],
+                    generation_config={
+                        "temperature": 0.5,
+                        "top_p": 0.95,
+                        "max_output_tokens": 1024,
+                        "response_mime_type": "application/json",
+                    },
+                    request_options={"timeout": 60},
+                )
+                raw_text = getattr(response, "text", "") or ""
+            else:  # pragma: no cover
+                raise RuntimeError("Nenhum backend Gemini configurado.")
         except Exception as exc:
             self.last_error = str(exc)
             raise
         latency = time.time() - start
-        raw_text = getattr(response, "text", "") or ""
         try:
             payload = json.loads(raw_text)
         except json.JSONDecodeError:
@@ -1990,7 +2104,7 @@ class GeminiVoiceAgent:
 
 
 def get_voice_agent() -> Optional[GeminiVoiceAgent]:
-    if genai is None:
+    if not gemini_sdk_available():
         return None
     agent = st.session_state.get("voice_agent")
     if not isinstance(agent, GeminiVoiceAgent):
@@ -2411,14 +2525,17 @@ def render_voice_agent_panel() -> None:
                 Grave uma mensagem curta e deixe o Gemini AI Studio transcrever e responder em tempo real.
                 A transcrição é enviada para o chat principal para manter todo mundo sincronizado.
             </p>
+            <p style='font-size:0.8em; color:#94a3b8; margin:0 auto; max-width:520px;'>
+                Usa o modelo <strong>gemini-2.5-flash</strong> (1.048.576 tokens de entrada / 65.536 de saída, multimodal com texto+imagem+video+audio).
+            </p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    if genai is None:
+    if not gemini_sdk_available():
         st.warning(
-            "Instale o SDK oficial com `pip install google-generativeai` para habilitar o agente de voz."
+            "Instale `google-genai` (SDK oficial) ou `google-generativeai` para habilitar o agente de voz."
         )
         return
 
@@ -2456,6 +2573,9 @@ def render_voice_agent_panel() -> None:
         else:
             audio_bytes = audio_file.getvalue()
             mime_type = audio_file.type or "audio/wav"
+            result: Optional[Dict[str, Any]] = None
+            transcript = ""
+            reply = ""
             try:
                 with st.spinner("Conversando com o Gemini..."):
                     result = agent.transcribe_and_respond(
@@ -2463,11 +2583,18 @@ def render_voice_agent_panel() -> None:
                         mime_type=mime_type,
                     )
             except Exception as exc:
-                st.session_state.voice_agent_status = f"Erro ao acionar Gemini: {exc}"
-                st.error(
-                    "Não foi possível entender o áudio agora. Verifique a conexão e tente novamente."
-                )
-            else:
+                error_text = str(exc)
+                st.session_state.voice_agent_status = f"Erro ao acionar Gemini: {error_text}"
+                if "404" in error_text and "models" in error_text:
+                    st.error(
+                        "Modelo Gemini não encontrado para esta API. Execute `client.models.list()` ou defina "
+                        "`GEMINI_MODEL_NAME=models/gemini-2.5-flash`."
+                    )
+                else:
+                    st.error(
+                        "Não foi possível entender o áudio agora. Verifique a conexão e tente novamente."
+                    )
+            if result:
                 transcript = result.get("transcription", "")
                 reply = result.get("assistant_reply", "")
                 latency = result.get("latency", 0.0)
@@ -2528,6 +2655,165 @@ def render_quick_prompt_bar() -> None:
             triggered_label = label
     if triggered_label:
         st.success(f"Atalho '{triggered_label}' enviado para o chat. Ajuste o texto antes de enviar se desejar.")
+
+
+def render_hackathon_triage_tab() -> None:
+    st.markdown("#### Triagem de enfermagem (Hackathon)")
+    st.caption(
+        "Coleta → processamento → relatório: preencha os sinais vitais e antecedentes para gerar alertas automáticos."
+    )
+    left_actions, right_actions = st.columns([3, 1])
+    with left_actions:
+        if st.button("Carregar exemplo oficial do Hackathon", key="load_hackathon_example"):
+            st.session_state.hackathon_triage_payload = example_triage_payload()
+            st.success("Dados de exemplo carregados. Ajuste antes de gerar o relatório.")
+    with right_actions:
+        if st.button("Limpar triagem", key="clear_hackathon_report"):
+            st.session_state.hackathon_triage_report = None
+            st.session_state.hackathon_triage_payload = {}
+            st.info("Triagem zerada.")
+
+    seed_payload = st.session_state.get("hackathon_triage_payload") or example_triage_payload()
+    chronic_seed = seed_payload.get("chronic_conditions", [])
+    allergy_seed = seed_payload.get("allergies", [])
+    med_seed = seed_payload.get("medications", [])
+
+    with st.form("hackathon_triage_form"):
+        col_left, col_right = st.columns(2)
+        systolic = col_left.number_input(
+            "Pressao sistolica (mmHg)",
+            min_value=0,
+            max_value=300,
+            value=int(seed_payload.get("systolic") or 0),
+        )
+        diastolic = col_left.number_input(
+            "Pressao diastolica (mmHg)",
+            min_value=0,
+            max_value=200,
+            value=int(seed_payload.get("diastolic") or 0),
+        )
+        heart_rate = col_left.number_input(
+            "Frequencia cardiaca (bpm)",
+            min_value=0,
+            max_value=250,
+            value=int(seed_payload.get("heart_rate") or 0),
+        )
+        temperature = col_left.number_input(
+            "Temperatura corporal (°C)",
+            min_value=0.0,
+            max_value=45.0,
+            value=float(seed_payload.get("temperature") or 0.0),
+            step=0.1,
+        )
+        spo2 = col_left.number_input(
+            "Saturacao de O2 (%)",
+            min_value=0,
+            max_value=100,
+            value=int(seed_payload.get("spo2") or 0),
+        )
+
+        age = col_right.number_input(
+            "Idade",
+            min_value=0,
+            max_value=120,
+            value=int(seed_payload.get("age") or 0),
+        )
+        sex_options = ["Nao informado", "Feminino", "Masculino"]
+        sex_value = seed_payload.get("sex", "Nao informado")
+        if sex_value not in sex_options:
+            sex_value = "Nao informado"
+        sex = col_right.selectbox("Sexo biologico", options=sex_options, index=sex_options.index(sex_value))
+        blood_options = ["Nao informado", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
+        blood_value = seed_payload.get("blood_type", "Nao informado")
+        if blood_value not in blood_options:
+            blood_value = "Nao informado"
+        blood_type = col_right.selectbox(
+            "Tipo sanguineo (opcional)",
+            options=blood_options,
+            index=blood_options.index(blood_value),
+        )
+        chronic_selected = col_right.multiselect(
+            "Doencas cronicas",
+            options=COMMON_CHRONIC_CONDITIONS,
+            default=[item for item in chronic_seed if item in COMMON_CHRONIC_CONDITIONS],
+        )
+        chronic_extra = col_right.text_input(
+            "Outras condicoes cronicas",
+            value=", ".join(item for item in chronic_seed if item not in COMMON_CHRONIC_CONDITIONS),
+        )
+
+        allergies = st.multiselect(
+            "Alergias conhecidas",
+            options=COMMON_ALLERGIES,
+            default=[item for item in allergy_seed if item in COMMON_ALLERGIES],
+        )
+        allergy_extra = st.text_input(
+            "Outras alergias",
+            value=", ".join(item for item in allergy_seed if item not in COMMON_ALLERGIES),
+        )
+        medications = st.multiselect(
+            "Medicacoes de uso continuo",
+            options=COMMON_MEDICATIONS,
+            default=[item for item in med_seed if item in COMMON_MEDICATIONS],
+        )
+        meds_extra = st.text_input(
+            "Outras medicacoes",
+            value=", ".join(item for item in med_seed if item not in COMMON_MEDICATIONS),
+        )
+        symptoms_text = st.text_area(
+            "Sintomas relatados",
+            value="\n".join(seed_payload.get("symptoms", [])),
+            placeholder="Ex.: dor no peito, febre persistente, falta de ar...",
+        )
+        submitted = st.form_submit_button("Gerar relatorio automatizado", use_container_width=True)
+
+    if submitted and NursingTriageInput is not Any:
+        payload = NursingTriageInput(
+            systolic=sanitize_numeric(systolic),
+            diastolic=sanitize_numeric(diastolic),
+            heart_rate=sanitize_numeric(heart_rate),
+            temperature=sanitize_numeric(temperature),
+            spo2=sanitize_numeric(spo2),
+            age=int(age) if age else None,
+            sex=sex,
+            chronic_conditions=chronic_selected + parse_free_text_list(chronic_extra),
+            allergies=allergies + parse_free_text_list(allergy_extra),
+            blood_type=None if blood_type == "Nao informado" else blood_type,
+            medications=medications + parse_free_text_list(meds_extra),
+            symptoms=parse_free_text_list(symptoms_text),
+        )
+        report = generate_triage_report(payload)
+        st.session_state.hackathon_triage_report = report
+        st.session_state.hackathon_triage_payload = payload.to_dict()
+        st.success("Relatorio gerado com sucesso! Confira o resumo abaixo.")
+
+    report_data = st.session_state.get("hackathon_triage_report")
+    if report_data:
+        report_dict = report_data.to_dict() if hasattr(report_data, "to_dict") else report_data
+        summary = (
+            report_data.summary_markdown()
+            if hasattr(report_data, "summary_markdown")
+            else ""
+        )
+        if summary:
+            st.markdown(summary)
+        score = report_dict.get("processamento", {}).get("pontuacao", 0)
+        st.progress(min(score / 3, 1.0))
+        download_payload = json.dumps(report_dict, ensure_ascii=False, indent=2)
+        st.download_button(
+            "Baixar JSON",
+            data=download_payload.encode("utf-8"),
+            file_name="hackathon_triage_report.json",
+            mime="application/json",
+        )
+        with st.expander("Coleta (camada 1)"):
+            st.json(report_dict.get("coleta", {}))
+        with st.expander("Processamento (camada 2)"):
+            st.json(report_dict.get("processamento", {}))
+        with st.expander("Relatorio (camada 3)"):
+            st.json(report_dict.get("relatorio", {}))
+    else:
+        st.info("Preencha os dados acima e clique em Gerar relatório para obter alertas automáticos.")
 
 
 def render_history() -> None:
@@ -2612,6 +2898,8 @@ def main() -> None:
         "indicando quando um especialista humano deve ser consultado. Caso o usuario solicite calculo de IMC ou outras "
         "informacoes especificas, atenda prontamente e retome a triagem apenas se ele quiser prosseguir. "
         "Quando detectar sinais criticos, priorize orientacao emergencial. "
+        "Quando houver relatorios da triagem de enfermagem do Hackathon, considere os alertas e encaminhamentos sugeridos "
+        "e destaque os principais riscos e prioridades clinicas ao responder. "
         "Mantenha o dialogo aberto apos concluir as perguntas, dando continuidade a duvidas ou novas solicitacoes sem forcar reinicio."
     )
 
@@ -2622,6 +2910,9 @@ def main() -> None:
     with triage_tab:
         render_voice_agent_panel()
         render_quick_prompt_bar()
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        render_hackathon_triage_tab()
         st.markdown("<br>", unsafe_allow_html=True)
 
         render_history()
