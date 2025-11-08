@@ -3216,6 +3216,7 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
             composed_input, context_meta = prepare_context_for_model(user_input, medication_alerts=medication_alerts)
             model_messages = build_model_messages(system_prompt)
             model_messages.append({"role": "user", "content": composed_input})
+            model_error_context: Dict[str, Any] = {}
 
             try:
                 response = predict_with_fallback(groq_client, model, model_messages)
