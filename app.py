@@ -2150,157 +2150,268 @@ def render_sidebar() -> None:
 
 
 def render_patient_panel() -> None:
-    st.markdown("### Dados do paciente")
+    st.markdown("### Perfil e triagem de enfermagem")
     demographics = st.session_state.get("demographics")
     if not isinstance(demographics, dict):
         demographics = {}
     current_history = demographics.get("history")
     if not isinstance(current_history, dict):
         current_history = {}
+    triage_seed = st.session_state.get("hackathon_triage_payload") or example_triage_payload()
 
-    age_default = demographics.get("age")
-    age_input = st.number_input(
-        "Idade (anos)",
-        min_value=0,
-        max_value=120,
-        value=int(age_default) if isinstance(age_default, (int, float)) and age_default > 0 else 0,
-        step=1,
-    )
-
-    sex_options = ["Selecione", "F", "M", "Outro"]
-    current_sex = demographics.get("sex")
-    sex_index = sex_options.index(current_sex) if current_sex in sex_options else 0
-    sex_input = st.selectbox("Sexo", options=sex_options, index=sex_index)
-
-    weight_default = demographics.get("weight_kg") or 0.0
-    height_default = demographics.get("height_cm") or 0.0
-    weight_input = st.number_input(
-        "Peso (kg)",
-        min_value=0.0,
-        max_value=400.0,
-        value=float(weight_default),
-        step=0.5,
-        format="%.1f",
-    )
-    height_input = st.number_input(
-        "Altura (cm)",
-        min_value=0.0,
-        max_value=250.0,
-        value=float(height_default),
-        step=0.5,
-        format="%.1f",
-    )
-    bmi_value: Optional[float] = None
-    if weight_input > 0 and height_input > 0:
-        bmi_value = weight_input / ((height_input / 100) ** 2)
-        st.caption(f"IMC calculado: {bmi_value:.1f}")
-
-    pregnancy_status = demographics.get("pregnancy_status")
-    if sex_input == "F":
-        pregnancy_options = ["Nao", "Primeiro trimestre", "Segundo trimestre", "Terceiro trimestre"]
-        pregnancy_index = pregnancy_options.index(pregnancy_status) if pregnancy_status in pregnancy_options else 0
-        pregnancy_status = st.selectbox("Gestacao atual", options=pregnancy_options, index=pregnancy_index)
-    else:
-        pregnancy_status = None
-
-    smoking_options = ["Nao fumante", "Ex-fumante", "Fumante atual"]
-    current_smoke = demographics.get("smoking_status")
-    smoke_index = smoking_options.index(current_smoke) if current_smoke in smoking_options else 0
-    smoking_status = st.selectbox("Tabagismo", options=smoking_options, index=smoke_index)
-
-    st.caption("Condicoes clinicas relevantes")
-    history_labels = {
-        "congestive_heart_failure": "Insuficiencia cardiaca",
-        "hypertension": "Hipertensao",
-        "stroke_tia": "AVE/AIT previo",
-        "diabetes": "Diabetes",
-        "vascular_disease": "Doenca vascular",
+    history_catalog = {
+        "Insuficiencia cardiaca": "congestive_heart_failure",
+        "Hipertensao": "hypertension",
+        "AVE/AIT previo": "stroke_tia",
+        "Diabetes": "diabetes",
+        "Doenca vascular": "vascular_disease",
     }
-    updated_history: Dict[str, bool] = {}
-    for key, label in history_labels.items():
-        updated_history[key] = st.checkbox(
-            label,
-            value=bool(current_history.get(key)),
-            key=f"history_{key}",
+    history_default = [
+        label for label, key in history_catalog.items() if current_history.get(key)
+    ]
+    extra_chronic_defaults = [
+        item
+        for item in triage_seed.get("chronic_conditions", [])
+        if item not in history_catalog
+    ]
+    allergy_defaults = triage_seed.get("allergies", [])
+    medication_defaults = triage_seed.get("medications", [])
+
+    triage_available = isinstance(NursingTriageInput, type)
+
+    with st.form("patient_profile_form"):
+        col_demo, col_biometrics = st.columns(2)
+        age_default = demographics.get("age")
+        age_input = col_demo.number_input(
+            "Idade (anos)",
+            min_value=0,
+            max_value=120,
+            value=int(age_default) if isinstance(age_default, (int, float)) and age_default > 0 else 0,
+            step=1,
+        )
+        sex_options = ["Selecione", "Feminino", "Masculino", "Outro"]
+        current_sex = demographics.get("sex") or triage_seed.get("sex", "Selecione")
+        if current_sex in {"F", "M"}:
+            current_sex = "Feminino" if current_sex == "F" else "Masculino"
+        sex_index = sex_options.index(current_sex) if current_sex in sex_options else 0
+        sex_input = col_demo.selectbox("Sexo", options=sex_options, index=sex_index)
+        blood_options = ["Nao informado", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
+        blood_default = triage_seed.get("blood_type") or demographics.get("blood_type") or "Nao informado"
+        if blood_default not in blood_options:
+            blood_default = "Nao informado"
+        blood_type = col_demo.selectbox(
+            "Tipo sanguineo",
+            options=blood_options,
+            index=blood_options.index(blood_default),
+        )
+        smoking_options = ["Nao fumante", "Ex-fumante", "Fumante atual"]
+        current_smoke = demographics.get("smoking_status")
+        smoke_index = smoking_options.index(current_smoke) if current_smoke in smoking_options else 0
+        smoking_status = col_demo.selectbox("Tabagismo", options=smoking_options, index=smoke_index)
+        pregnancy_status = demographics.get("pregnancy_status")
+        if sex_input == "Feminino":
+            pregnancy_options = ["Nao", "Primeiro trimestre", "Segundo trimestre", "Terceiro trimestre"]
+            preg_index = pregnancy_options.index(pregnancy_status) if pregnancy_status in pregnancy_options else 0
+            pregnancy_status = col_demo.selectbox("Gestacao atual", options=pregnancy_options, index=preg_index)
+        else:
+            pregnancy_status = None
+
+        weight_default = demographics.get("weight_kg") or 0.0
+        height_default = demographics.get("height_cm") or 0.0
+        weight_input = col_biometrics.number_input(
+            "Peso (kg)",
+            min_value=0.0,
+            max_value=400.0,
+            value=float(weight_default),
+            step=0.5,
+            format="%.1f",
+        )
+        height_input = col_biometrics.number_input(
+            "Altura (cm)",
+            min_value=0.0,
+            max_value=250.0,
+            value=float(height_default),
+            step=0.5,
+            format="%.1f",
+        )
+        bmi_value: Optional[float] = None
+        if weight_input > 0 and height_input > 0:
+            bmi_value = weight_input / ((height_input / 100) ** 2)
+            col_biometrics.caption(f"IMC calculado: {bmi_value:.1f}")
+
+        st.divider()
+        st.caption("Sinais vitais para triagem automática")
+        col_bp, col_vitals = st.columns(2)
+        blood_pressure = demographics.get("blood_pressure")
+        if not isinstance(blood_pressure, dict):
+            blood_pressure = {}
+        systolic_input = col_bp.number_input(
+            "Pressao sistolica",
+            min_value=0,
+            max_value=250,
+            value=int(blood_pressure.get("systolic") or triage_seed.get("systolic") or 0),
+            step=1,
+        )
+        diastolic_input = col_bp.number_input(
+            "Pressao diastolica",
+            min_value=0,
+            max_value=160,
+            value=int(blood_pressure.get("diastolic") or triage_seed.get("diastolic") or 0),
+            step=1,
+        )
+        heart_rate_input = col_vitals.number_input(
+            "Frequencia cardiaca (bpm)",
+            min_value=0,
+            max_value=250,
+            value=int(triage_seed.get("heart_rate") or 0),
+            step=1,
+        )
+        temperature_input = col_vitals.number_input(
+            "Temperatura (°C)",
+            min_value=0.0,
+            max_value=45.0,
+            value=float(triage_seed.get("temperature") or 0.0),
+            step=0.1,
+        )
+        spo2_input = col_vitals.number_input(
+            "Saturacao de O₂ (%)",
+            min_value=0,
+            max_value=100,
+            value=int(triage_seed.get("spo2") or 0),
+            step=1,
         )
 
-    st.caption("Pressao arterial (opcional)")
-    blood_pressure = demographics.get("blood_pressure")
-    if not isinstance(blood_pressure, dict):
-        blood_pressure = {}
-    systolic_input = st.number_input(
-        "Pressao sistolica",
-        min_value=0,
-        max_value=250,
-        value=int(blood_pressure.get("systolic", 0) or 0),
-        step=1,
-    )
-    diastolic_input = st.number_input(
-        "Pressao diastolica",
-        min_value=0,
-        max_value=160,
-        value=int(blood_pressure.get("diastolic", 0) or 0),
-        step=1,
-    )
+        st.caption("Condicoes clinicas e antecedentes")
+        history_options = list(history_catalog.keys())
+        chronic_selection = st.multiselect(
+            "Selecione condicoes",
+            options=history_options + [item for item in COMMON_CHRONIC_CONDITIONS if item not in history_options],
+            default=list(dict.fromkeys(history_default + [item for item in triage_seed.get("chronic_conditions", []) if item in history_options])),
+        )
+        chronic_extra_input = st.text_input(
+            "Outras condicoes cronicas",
+            value=", ".join([item for item in extra_chronic_defaults if item not in chronic_selection]),
+        )
+        allergies_selected = st.multiselect(
+            "Alergias conhecidas",
+            options=COMMON_ALLERGIES,
+            default=[item for item in allergy_defaults if item in COMMON_ALLERGIES],
+        )
+        allergy_extra = st.text_input(
+            "Outras alergias",
+            value=", ".join([item for item in allergy_defaults if item not in COMMON_ALLERGIES]),
+        )
+        medications_selected = st.multiselect(
+            "Medicacoes de uso continuo",
+            options=COMMON_MEDICATIONS,
+            default=[item for item in medication_defaults if item in COMMON_MEDICATIONS],
+        )
+        meds_extra = st.text_input(
+            "Outras medicacoes",
+            value=", ".join([item for item in medication_defaults if item not in COMMON_MEDICATIONS]),
+        )
+        symptoms_text = st.text_area(
+            "Sintomas relatados",
+            value="\n".join(triage_seed.get("symptoms", [])),
+            placeholder="Ex.: dor no peito, febre persistente, falta de ar...",
+        )
 
-    notes_input = st.text_area(
-        "Outras informacoes clinicas (opcional)",
-        value=str(demographics.get("notes") or ""),
-        height=80,
-    )
+        st.caption("Observacoes adicionais")
+        notes_input = st.text_area(
+            "Outras informacoes clinicas",
+            value=str(demographics.get("notes") or ""),
+            height=80,
+        )
 
-    processed_demo = {
-        key: value
-        for key, value in demographics.items()
-        if key
-        not in {
-            "age",
-            "sex",
-            "history",
-            "blood_pressure",
-            "notes",
-            "weight_kg",
-            "height_cm",
-            "bmi",
-            "pregnancy_status",
-            "smoking_status",
+        submitted = st.form_submit_button(
+            "Salvar dados e gerar relatório automático",
+            use_container_width=True,
+        )
+
+    if submitted:
+        processed_demo = {
+            key: value
+            for key, value in demographics.items()
+            if key
+            not in {
+                "age",
+                "sex",
+                "history",
+                "blood_pressure",
+                "notes",
+                "weight_kg",
+                "height_cm",
+                "bmi",
+                "pregnancy_status",
+                "smoking_status",
+                "blood_type",
+            }
         }
-    }
-    processed_demo["history"] = updated_history
-    processed_demo["notes"] = notes_input.strip() or None
-    processed_demo["age"] = int(age_input) if age_input > 0 else None
-    processed_demo["sex"] = sex_input if sex_input != "Selecione" else None
-    processed_demo["weight_kg"] = round(weight_input, 1) if weight_input > 0 else None
-    processed_demo["height_cm"] = round(height_input, 1) if height_input > 0 else None
-    processed_demo["smoking_status"] = smoking_status
-    if pregnancy_status and pregnancy_status != "Nao":
-        processed_demo["pregnancy_status"] = pregnancy_status
-    else:
-        processed_demo.pop("pregnancy_status", None)
-    if bmi_value:
-        processed_demo["bmi"] = round(bmi_value, 1)
-    else:
-        processed_demo.pop("bmi", None)
+        updated_history: Dict[str, bool] = {key: False for key in history_catalog.values()}
+        for label in chronic_selection:
+            mapped = history_catalog.get(label)
+            if mapped:
+                updated_history[mapped] = True
+        processed_demo["history"] = updated_history
+        processed_demo["notes"] = notes_input.strip() or None
+        processed_demo["age"] = int(age_input) if age_input > 0 else None
+        processed_demo["sex"] = {"Feminino": "F", "Masculino": "M"}.get(sex_input, None)
+        processed_demo["weight_kg"] = round(weight_input, 1) if weight_input > 0 else None
+        processed_demo["height_cm"] = round(height_input, 1) if height_input > 0 else None
+        processed_demo["smoking_status"] = smoking_status
+        if pregnancy_status and pregnancy_status != "Nao":
+            processed_demo["pregnancy_status"] = pregnancy_status
+        else:
+            processed_demo.pop("pregnancy_status", None)
+        if bmi_value:
+            processed_demo["bmi"] = round(bmi_value, 1)
+        else:
+            processed_demo.pop("bmi", None)
+        if systolic_input > 0 and diastolic_input > 0:
+            processed_demo["blood_pressure"] = {
+                "systolic": int(systolic_input),
+                "diastolic": int(diastolic_input),
+            }
+        else:
+            processed_demo.pop("blood_pressure", None)
+        processed_demo["blood_type"] = None if blood_type == "Nao informado" else blood_type
+        if not processed_demo["notes"]:
+            processed_demo.pop("notes", None)
+        if not processed_demo["weight_kg"]:
+            processed_demo.pop("weight_kg", None)
+        if not processed_demo["height_cm"]:
+            processed_demo.pop("height_cm", None)
 
-    if systolic_input > 0 and diastolic_input > 0:
-        processed_demo["blood_pressure"] = {
-            "systolic": int(systolic_input),
-            "diastolic": int(diastolic_input),
-        }
-    else:
-        processed_demo.pop("blood_pressure", None)
+        if processed_demo != demographics:
+            st.session_state.demographics = processed_demo
+            refresh_multiexam_reasoning()
 
-    if not processed_demo["notes"]:
-        processed_demo.pop("notes", None)
-    if not processed_demo["weight_kg"]:
-        processed_demo.pop("weight_kg", None)
-    if not processed_demo["height_cm"]:
-        processed_demo.pop("height_cm", None)
+        full_chronic_list = list(dict.fromkeys(chronic_selection + parse_free_text_list(chronic_extra_input)))
+        allergies_list = list(dict.fromkeys(allergies_selected + parse_free_text_list(allergy_extra)))
+        medication_list = list(dict.fromkeys(medications_selected + parse_free_text_list(meds_extra)))
+        symptoms_list = parse_free_text_list(symptoms_text)
 
-    if processed_demo != demographics:
-        st.session_state.demographics = processed_demo
-        refresh_multiexam_reasoning()
-        st.success("Dados demograficos atualizados.")
+        if triage_available:
+            payload = NursingTriageInput(
+                systolic=sanitize_numeric(systolic_input),
+                diastolic=sanitize_numeric(diastolic_input),
+                heart_rate=sanitize_numeric(heart_rate_input),
+                temperature=sanitize_numeric(temperature_input),
+                spo2=sanitize_numeric(spo2_input),
+                age=int(age_input) if age_input else None,
+                sex=sex_input,
+                chronic_conditions=full_chronic_list,
+                allergies=allergies_list,
+                blood_type=None if blood_type == "Nao informado" else blood_type,
+                medications=medication_list,
+                symptoms=symptoms_list,
+            )
+            report = generate_triage_report(payload)
+            st.session_state.hackathon_triage_report = report
+            st.session_state.hackathon_triage_payload = payload.to_dict()
+            st.success("Triagem automatizada atualizada com sucesso.")
+        else:
+            st.warning("Módulo do Hackathon não está disponível neste ambiente.")
 
     if st.session_state.symptom_log:
         with st.expander("Resumo rapido de sintomas", expanded=False):
@@ -2398,7 +2509,7 @@ def render_patient_panel() -> None:
                 st.write("- " + note)
 
     st.markdown("---")
-    st.subheader("Relatorio final")
+    st.subheader("Relatorio final e Hackathon")
     final_summary = st.session_state.printable_summary or build_symptom_report()
     st.text_area(
         "Resumo consolidado",
@@ -2414,9 +2525,25 @@ def render_patient_panel() -> None:
     )
     hackathon_report = st.session_state.get("hackathon_triage_report")
     if hackathon_report:
-        with st.expander("Ver relatorio detalhado do Hackathon"):
-            report_dict = hackathon_report.to_dict() if hasattr(hackathon_report, "to_dict") else hackathon_report
-            st.json(report_dict)
+        report_dict = hackathon_report.to_dict() if hasattr(hackathon_report, "to_dict") else hackathon_report
+        summary = (
+            hackathon_report.summary_markdown()
+            if hasattr(hackathon_report, "summary_markdown")
+            else ""
+        )
+        if summary:
+            st.markdown(summary)
+        score = report_dict.get("processamento", {}).get("pontuacao", 0)
+        st.progress(min(score / 3, 1.0))
+        download_payload = json.dumps(report_dict, ensure_ascii=False, indent=2)
+        st.download_button(
+            "Baixar relatório da triagem (JSON)",
+            data=download_payload.encode("utf-8"),
+            file_name="hackathon_triage_report.json",
+            mime="application/json",
+        )
+    else:
+        st.caption("Preencha o formulário e clique em salvar para gerar o relatório automático.")
 
     st.markdown("---")
     st.subheader("Educacao personalizada")
@@ -2683,165 +2810,6 @@ def render_quick_prompt_bar() -> None:
         st.success(f"Atalho '{triggered_label}' enviado para o chat. Ajuste o texto antes de enviar se desejar.")
 
 
-def render_hackathon_triage_tab() -> None:
-    st.markdown("#### Triagem de enfermagem (Hackathon)")
-    st.caption(
-        "Coleta → processamento → relatório: preencha os sinais vitais e antecedentes para gerar alertas automáticos."
-    )
-    left_actions, right_actions = st.columns([3, 1])
-    with left_actions:
-        if st.button("Carregar exemplo oficial do Hackathon", key="load_hackathon_example"):
-            st.session_state.hackathon_triage_payload = example_triage_payload()
-            st.success("Dados de exemplo carregados. Ajuste antes de gerar o relatório.")
-    with right_actions:
-        if st.button("Limpar triagem", key="clear_hackathon_report"):
-            st.session_state.hackathon_triage_report = None
-            st.session_state.hackathon_triage_payload = {}
-            st.info("Triagem zerada.")
-
-    seed_payload = st.session_state.get("hackathon_triage_payload") or example_triage_payload()
-    chronic_seed = seed_payload.get("chronic_conditions", [])
-    allergy_seed = seed_payload.get("allergies", [])
-    med_seed = seed_payload.get("medications", [])
-
-    with st.form("hackathon_triage_form"):
-        col_left, col_right = st.columns(2)
-        systolic = col_left.number_input(
-            "Pressao sistolica (mmHg)",
-            min_value=0,
-            max_value=300,
-            value=int(seed_payload.get("systolic") or 0),
-        )
-        diastolic = col_left.number_input(
-            "Pressao diastolica (mmHg)",
-            min_value=0,
-            max_value=200,
-            value=int(seed_payload.get("diastolic") or 0),
-        )
-        heart_rate = col_left.number_input(
-            "Frequencia cardiaca (bpm)",
-            min_value=0,
-            max_value=250,
-            value=int(seed_payload.get("heart_rate") or 0),
-        )
-        temperature = col_left.number_input(
-            "Temperatura corporal (°C)",
-            min_value=0.0,
-            max_value=45.0,
-            value=float(seed_payload.get("temperature") or 0.0),
-            step=0.1,
-        )
-        spo2 = col_left.number_input(
-            "Saturacao de O2 (%)",
-            min_value=0,
-            max_value=100,
-            value=int(seed_payload.get("spo2") or 0),
-        )
-
-        age = col_right.number_input(
-            "Idade",
-            min_value=0,
-            max_value=120,
-            value=int(seed_payload.get("age") or 0),
-        )
-        sex_options = ["Nao informado", "Feminino", "Masculino"]
-        sex_value = seed_payload.get("sex", "Nao informado")
-        if sex_value not in sex_options:
-            sex_value = "Nao informado"
-        sex = col_right.selectbox("Sexo biologico", options=sex_options, index=sex_options.index(sex_value))
-        blood_options = ["Nao informado", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
-        blood_value = seed_payload.get("blood_type", "Nao informado")
-        if blood_value not in blood_options:
-            blood_value = "Nao informado"
-        blood_type = col_right.selectbox(
-            "Tipo sanguineo (opcional)",
-            options=blood_options,
-            index=blood_options.index(blood_value),
-        )
-        chronic_selected = col_right.multiselect(
-            "Doencas cronicas",
-            options=COMMON_CHRONIC_CONDITIONS,
-            default=[item for item in chronic_seed if item in COMMON_CHRONIC_CONDITIONS],
-        )
-        chronic_extra = col_right.text_input(
-            "Outras condicoes cronicas",
-            value=", ".join(item for item in chronic_seed if item not in COMMON_CHRONIC_CONDITIONS),
-        )
-
-        allergies = st.multiselect(
-            "Alergias conhecidas",
-            options=COMMON_ALLERGIES,
-            default=[item for item in allergy_seed if item in COMMON_ALLERGIES],
-        )
-        allergy_extra = st.text_input(
-            "Outras alergias",
-            value=", ".join(item for item in allergy_seed if item not in COMMON_ALLERGIES),
-        )
-        medications = st.multiselect(
-            "Medicacoes de uso continuo",
-            options=COMMON_MEDICATIONS,
-            default=[item for item in med_seed if item in COMMON_MEDICATIONS],
-        )
-        meds_extra = st.text_input(
-            "Outras medicacoes",
-            value=", ".join(item for item in med_seed if item not in COMMON_MEDICATIONS),
-        )
-        symptoms_text = st.text_area(
-            "Sintomas relatados",
-            value="\n".join(seed_payload.get("symptoms", [])),
-            placeholder="Ex.: dor no peito, febre persistente, falta de ar...",
-        )
-        submitted = st.form_submit_button("Gerar relatorio automatizado", use_container_width=True)
-
-    if submitted and NursingTriageInput is not Any:
-        payload = NursingTriageInput(
-            systolic=sanitize_numeric(systolic),
-            diastolic=sanitize_numeric(diastolic),
-            heart_rate=sanitize_numeric(heart_rate),
-            temperature=sanitize_numeric(temperature),
-            spo2=sanitize_numeric(spo2),
-            age=int(age) if age else None,
-            sex=sex,
-            chronic_conditions=chronic_selected + parse_free_text_list(chronic_extra),
-            allergies=allergies + parse_free_text_list(allergy_extra),
-            blood_type=None if blood_type == "Nao informado" else blood_type,
-            medications=medications + parse_free_text_list(meds_extra),
-            symptoms=parse_free_text_list(symptoms_text),
-        )
-        report = generate_triage_report(payload)
-        st.session_state.hackathon_triage_report = report
-        st.session_state.hackathon_triage_payload = payload.to_dict()
-        st.success("Relatorio gerado com sucesso! Confira o resumo abaixo.")
-
-    report_data = st.session_state.get("hackathon_triage_report")
-    if report_data:
-        report_dict = report_data.to_dict() if hasattr(report_data, "to_dict") else report_data
-        summary = (
-            report_data.summary_markdown()
-            if hasattr(report_data, "summary_markdown")
-            else ""
-        )
-        if summary:
-            st.markdown(summary)
-        score = report_dict.get("processamento", {}).get("pontuacao", 0)
-        st.progress(min(score / 3, 1.0))
-        download_payload = json.dumps(report_dict, ensure_ascii=False, indent=2)
-        st.download_button(
-            "Baixar JSON",
-            data=download_payload.encode("utf-8"),
-            file_name="hackathon_triage_report.json",
-            mime="application/json",
-        )
-        with st.expander("Coleta (camada 1)"):
-            st.json(report_dict.get("coleta", {}))
-        with st.expander("Processamento (camada 2)"):
-            st.json(report_dict.get("processamento", {}))
-        with st.expander("Relatorio (camada 3)"):
-            st.json(report_dict.get("relatorio", {}))
-    else:
-        st.info("Preencha os dados acima e clique em Gerar relatório para obter alertas automáticos.")
-
-
 def render_history() -> None:
     st.subheader("Respostas do MedIA")
     if st.session_state.history:
@@ -2917,9 +2885,6 @@ def render_primary_workspace() -> None:
     with triage_tab:
         render_voice_agent_panel()
         render_quick_prompt_bar()
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        render_hackathon_triage_tab()
         st.markdown("<br>", unsafe_allow_html=True)
 
         render_history()
