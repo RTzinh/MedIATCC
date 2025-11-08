@@ -1,0 +1,14 @@
+{
+  "systolic": 188,
+  "diastolic": 118,
+  "heart_rate": 126,
+  "temperature": 38.6,
+  "spo2": 91,
+  "age": 64,
+  "sex": "Feminino",
+  "chronic_conditions": ["Hipertensão", "Diabetes"],
+  "allergies": ["Dipirona"],
+  "blood_type": "O+",
+  "medications": ["Losartana 50mg", "Metformina 850mg"],
+  "symptoms": ["Dor no peito com irradiacao", "Falta de ar em repouso"]
+}

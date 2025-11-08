@@ -1,0 +1,80 @@
+{
+  "coleta": {
+    "systolic": 188,
+    "diastolic": 118,
+    "heart_rate": 126,
+    "temperature": 38.6,
+    "spo2": 91,
+    "age": 64,
+    "sex": "Feminino",
+    "chronic_conditions": [
+      "Hipertensão",
+      "Diabetes"
+    ],
+    "allergies": [
+      "Dipirona"
+    ],
+    "blood_type": "O+",
+    "medications": [
+      "Losartana 50mg",
+      "Metformina 850mg"
+    ],
+    "symptoms": [
+      "Dor no peito com irradiacao",
+      "Falta de ar em repouso"
+    ]
+  },
+  "processamento": {
+    "data_processamento": "2025-11-08T14:22:57.082540Z",
+    "risco": "Critico",
+    "pontuacao": 3,
+    "audit_trail": [
+      {
+        "metric": "PA",
+        "message": "Pressao critica compativel com urgencia hipertensiva.",
+        "impact": "Critico"
+      },
+      {
+        "metric": "FC",
+        "message": "Taquicardia moderada observada.",
+        "impact": "Alto"
+      },
+      {
+        "metric": "SpO2",
+        "message": "Saturacao levemente reduzida, monitorar.",
+        "impact": "Alto"
+      },
+      {
+        "metric": "Sintomas",
+        "message": "Sintoma relatado: dor no peito com irradiacao.",
+        "impact": "Critico"
+      },
+      {
+        "metric": "Sintomas",
+        "message": "Sintoma relatado: falta de ar em repouso.",
+        "impact": "Critico"
+      }
+    ],
+    "sugestoes_exames": [
+      "Verificar glicemia capilar e ECG basico.",
+      "Conferir interacoes com medicacoes em uso continuo."
+    ]
+  },
+  "relatorio": {
+    "risco": "Critico",
+    "prioridade": "Emergencia / sala vermelha",
+    "alertas": [
+      "Pressao critica compativel com urgencia hipertensiva.",
+      "Taquicardia moderada observada.",
+      "Saturacao levemente reduzida, monitorar.",
+      "Sintoma relatado: dor no peito com irradiacao.",
+      "Sintoma relatado: falta de ar em repouso.",
+      "Alergias registradas: Dipirona"
+    ],
+    "encaminhamentos": [
+      "Encaminhar imediatamente para sala de emergencia.",
+      "Acionar protocolo de emergencia."
+    ],
+    "justificativa": "Sintoma relatado: falta de ar em repouso."
+  }
+}

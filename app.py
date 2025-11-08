@@ -73,6 +73,21 @@ except ModuleNotFoundError:  # pragma: no cover - optional integrations
     def get_cad_handler() -> Optional[Any]:
         return None
 
+try:
+    from hackathon import (
+        NursingTriageInput,
+        example_triage_payload,
+        generate_triage_report,
+    )
+except ModuleNotFoundError:  # pragma: no cover - optional module
+    NursingTriageInput = Any  # type: ignore
+
+    def example_triage_payload() -> Dict[str, Any]:  # type: ignore
+        return {}
+
+    def generate_triage_report(_: Any) -> Dict[str, Any]:  # type: ignore
+        return {}
+
 def safe_show_image(image: Any, caption: Optional[str] = None, **kwargs: Any) -> None:
     """Wrapper to avoid Streamlit media cache errors when the file is missing."""
     if image is None:
@@ -203,6 +218,39 @@ QUICK_PROMPTS = [
         "text": "Pode resumir nossa conversa e listar exames ou orientacoes que devo seguir nas proximas 24h?",
     },
 ]
+
+COMMON_CHRONIC_CONDITIONS = [
+    "Hipertensão",
+    "Diabetes",
+    "Asma",
+    "DPOC",
+    "Cardiopatia",
+    "Insuficiencia cardiaca",
+]
+COMMON_ALLERGIES = [
+    "Dipirona",
+    "Ibuprofeno",
+    "Amoxicilina",
+    "Penicilina",
+    "Losartana",
+]
+COMMON_MEDICATIONS = [
+    "Losartana 50mg",
+    "Metformina 850mg",
+    "AAS 100mg",
+    "Atorvastatina 20mg",
+]
+
+
+def parse_free_text_list(value: str) -> List[str]:
+    tokens = re.split(r"[,;\n]+", value or "")
+    return [item.strip() for item in tokens if item.strip()]
+
+
+def sanitize_numeric(value: float) -> Optional[float]:
+    if value and value > 0:
+        return float(value)
+    return None
 
 
 CLINICAL_DISCLAIMER = (
@@ -497,6 +545,8 @@ def ensure_session_defaults() -> None:
         "triage_mode": False,
         "voice_conversation": [],
         "voice_agent_status": "",
+        "hackathon_triage_report": None,
+        "hackathon_triage_payload": {},
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -2573,6 +2623,185 @@ def render_quick_prompt_bar() -> None:
         st.success(f"Atalho '{triggered_label}' enviado para o chat. Ajuste o texto antes de enviar se desejar.")
 
 
+def render_hackathon_triage_tab() -> None:
+    st.header("🧠 Hackathon Saude Inteligente")
+    st.caption(
+        "Fluxo dedicado para o desafio de triagem de enfermagem: coleta estruturada → processamento interpretavel → relatorio automatizado."
+    )
+    st.markdown(
+        """
+        **Diretrizes principais**
+
+        - Enfermeiros registram sinais vitais e antecedentes básicos em poucos toques.
+        - O motor de regras do MedIA gera alertas transparentes e sugere encaminhamentos.
+        - O relatório pode ser compartilhado com o time médico ou exportado como JSON.
+        """,
+    )
+
+    if st.button("Carregar exemplo oficial do Hackathon", key="load_hackathon_sample"):
+        st.session_state.hackathon_triage_payload = example_triage_payload()
+        st.experimental_rerun()
+
+    payload_hint = st.session_state.get("hackathon_triage_payload") or example_triage_payload()
+    chronic_default = payload_hint.get("chronic_conditions", [])
+    allergies_default = payload_hint.get("allergies", [])
+    meds_default = payload_hint.get("medications", [])
+    symptoms_default = "\n".join(payload_hint.get("symptoms", []))
+
+    with st.form("hackathon_triage_form"):
+        col_left, col_right = st.columns(2)
+        systolic = col_left.number_input(
+            "Pressao sistolica (mmHg)",
+            min_value=0,
+            max_value=300,
+            value=int(payload_hint.get("systolic") or 0),
+        )
+        diastolic = col_left.number_input(
+            "Pressao diastolica (mmHg)",
+            min_value=0,
+            max_value=200,
+            value=int(payload_hint.get("diastolic") or 0),
+        )
+        heart_rate = col_left.number_input(
+            "Frequencia cardiaca (bpm)",
+            min_value=0,
+            max_value=250,
+            value=int(payload_hint.get("heart_rate") or 0),
+        )
+        temperature = col_left.number_input(
+            "Temperatura corporal (°C)",
+            min_value=0.0,
+            max_value=45.0,
+            step=0.1,
+            value=float(payload_hint.get("temperature") or 0.0),
+        )
+        spo2 = col_left.number_input(
+            "Saturacao de O2 (%)",
+            min_value=0,
+            max_value=100,
+            value=int(payload_hint.get("spo2") or 0),
+        )
+
+        age = col_right.number_input(
+            "Idade",
+            min_value=0,
+            max_value=120,
+            value=int(payload_hint.get("age") or 0),
+        )
+        sex_options = ["Não informado", "Feminino", "Masculino"]
+        sex_default = payload_hint.get("sex", "Não informado")
+        if sex_default not in sex_options:
+            sex_default = "Não informado"
+        sex = col_right.selectbox(
+            "Sexo biologico",
+            options=sex_options,
+            index=sex_options.index(sex_default),
+        )
+        blood_options = ["Não informado", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
+        blood_default = payload_hint.get("blood_type") or "Não informado"
+        if blood_default not in blood_options:
+            blood_default = "Não informado"
+        blood_type = col_right.selectbox(
+            "Tipo sanguineo (opcional)",
+            options=blood_options,
+            index=blood_options.index(blood_default),
+        )
+        chronic_conditions = col_right.multiselect(
+            "Doencas cronicas",
+            options=COMMON_CHRONIC_CONDITIONS,
+            default=[c for c in chronic_default if c in COMMON_CHRONIC_CONDITIONS],
+            help="Acrescente outras no campo texto abaixo.",
+        )
+        chronic_extra = col_right.text_input(
+            "Outras doencas cronicas",
+            value=", ".join([c for c in chronic_default if c not in COMMON_CHRONIC_CONDITIONS]),
+        )
+
+        allergies = st.multiselect(
+            "Alergias registradas",
+            options=COMMON_ALLERGIES,
+            default=[a for a in allergies_default if a in COMMON_ALLERGIES],
+        )
+        allergy_extra = st.text_input(
+            "Outras alergias",
+            value=", ".join([a for a in allergies_default if a not in COMMON_ALLERGIES]),
+        )
+        medications = st.multiselect(
+            "Medicacoes de uso continuo",
+            options=COMMON_MEDICATIONS,
+            default=[m for m in meds_default if m in COMMON_MEDICATIONS],
+        )
+        meds_extra = st.text_input(
+            "Outras medicacoes",
+            value=", ".join([m for m in meds_default if m not in COMMON_MEDICATIONS]),
+        )
+        symptoms_text = st.text_area(
+            "Sintomas relatados",
+            value=symptoms_default,
+            placeholder="Ex.: dor no peito, febre acima de 39°C, falta de ar ao repouso...",
+        )
+
+        submitted = st.form_submit_button(
+            "Gerar relatorio automatizado",
+            use_container_width=True,
+        )
+
+    if submitted:
+        payload = NursingTriageInput(
+            systolic=sanitize_numeric(systolic),
+            diastolic=sanitize_numeric(diastolic),
+            heart_rate=sanitize_numeric(heart_rate),
+            temperature=sanitize_numeric(temperature),
+            spo2=sanitize_numeric(spo2),
+            age=int(age) if age else None,
+            sex=sex,
+            chronic_conditions=chronic_conditions + parse_free_text_list(chronic_extra),
+            allergies=allergies + parse_free_text_list(allergy_extra),
+            blood_type=None if blood_type == "Não informado" else blood_type,
+            medications=medications + parse_free_text_list(meds_extra),
+            symptoms=parse_free_text_list(symptoms_text),
+        )
+        report = generate_triage_report(payload)
+        st.session_state.hackathon_triage_report = report
+        st.session_state.hackathon_triage_payload = payload.to_dict()
+        st.success("Relatorio gerado com sucesso! Veja os detalhes abaixo.")
+
+    report_data = st.session_state.get("hackathon_triage_report")
+    if report_data:
+        report_dict = (
+            report_data.to_dict()
+            if hasattr(report_data, "to_dict")
+            else report_data
+        )
+        summary = (
+            report_data.summary_markdown()
+            if hasattr(report_data, "summary_markdown")
+            else ""
+        )
+        if summary:
+            st.markdown(summary)
+
+        score = report_dict.get("processamento", {}).get("pontuacao", 0)
+        st.progress(min(score / 3, 1.0))
+
+        download_payload = json.dumps(report_dict, ensure_ascii=False, indent=2)
+        st.download_button(
+            "Baixar JSON da triagem",
+            data=download_payload.encode("utf-8"),
+            file_name="hackathon_triage_report.json",
+            mime="application/json",
+        )
+
+        with st.expander("Camada: Coleta"):
+            st.json(report_dict.get("coleta", {}))
+        with st.expander("Camada: Processamento e trilha de auditoria"):
+            st.json(report_dict.get("processamento", {}))
+        with st.expander("Camada: Relatorio final"):
+            st.json(report_dict.get("relatorio", {}))
+    else:
+        st.info("Preencha o formulario e clique em 'Gerar relatorio automatizado' para visualizar a triagem.")
+
+
 def render_history() -> None:
     st.subheader("Respostas do MedIA")
     if st.session_state.history:
@@ -2658,8 +2887,8 @@ def main() -> None:
         "Mantenha o dialogo aberto apos concluir as perguntas, dando continuidade a duvidas ou novas solicitacoes sem forcar reinicio."
     )
 
-    triage_tab, patient_tab, insights_tab = st.tabs(
-        ["Triagem", "Painel do paciente", "Insights"]
+    triage_tab, hackathon_tab, patient_tab, insights_tab = st.tabs(
+        ["Triagem", "Hackathon", "Painel do paciente", "Insights"]
     )
 
     with triage_tab:
@@ -2982,6 +3211,8 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
                     st.warning("gTTS nao disponivel ou falha ao gerar audio.")
 
             st.rerun()
+    with hackathon_tab:
+        render_hackathon_triage_tab()
     with patient_tab:
         render_patient_dashboard()
 
