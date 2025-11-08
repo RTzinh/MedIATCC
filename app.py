@@ -3048,9 +3048,7 @@ def render_primary_workspace() -> None:
         "Mantenha o dialogo aberto apos concluir as perguntas, dando continuidade a duvidas ou novas solicitacoes sem forcar reinicio."
     )
 
-    triage_tab, patient_tab, insights_tab = st.tabs(
-        ["Triagem", "Painel do paciente", "Insights"]
-    )
+    triage_tab, profile_tab, report_tab = st.tabs(["Triagem", "Perfil & triagem", "Relatorio"])
 
     with triage_tab:
         render_voice_agent_panel()
@@ -3321,13 +3319,11 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
                     st.warning("gTTS nao disponivel ou falha ao gerar audio.")
 
             st.rerun()
-    with patient_tab:
-        render_patient_dashboard()
+    with profile_tab:
+        render_patient_panel()
 
-    with insights_tab:
-        render_wearable_insights()
-        render_explainability_panel()
-        render_advanced_insights()
+    with report_tab:
+        render_report_viewer()
 
     st.markdown(
         """
@@ -3362,17 +3358,7 @@ def main() -> None:
     apply_theme_settings()
     render_sidebar()
 
-    content_col, side_col = st.columns([2.6, 1.2], gap="large")
-
-    with content_col:
-        render_primary_workspace()
-
-    with side_col:
-        profile_tab, report_tab = st.tabs(["Perfil & triagem", "Relatorio"])
-        with profile_tab:
-            render_patient_panel()
-        with report_tab:
-            render_report_viewer()
+    render_primary_workspace()
 
 
 
