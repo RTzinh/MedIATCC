@@ -264,6 +264,34 @@ def gemini_sdk_available() -> bool:
     return google_genai is not None or legacy_genai is not None
 
 
+def build_final_report_text() -> str:
+    sections: List[str] = []
+    symptom_report = st.session_state.printable_summary or build_symptom_report()
+    if symptom_report:
+        sections.append("Resumo clinico do MedIA:\n" + symptom_report.strip())
+    hackathon_report = st.session_state.get("hackathon_triage_report")
+    if hackathon_report:
+        summary = (
+            hackathon_report.summary_markdown()
+            if hasattr(hackathon_report, "summary_markdown")
+            else ""
+        )
+        hack_dict = (
+            hackathon_report.to_dict()
+            if hasattr(hackathon_report, "to_dict")
+            else hackathon_report
+        )
+        summary_text = summary.replace("**", "").replace("_", "")
+        if summary_text.strip():
+            sections.append("Triagem de enfermagem:\n" + summary_text.strip())
+        alerts = (hack_dict.get("relatorio", {}) if isinstance(hack_dict, dict) else {}).get("alertas")
+        if alerts:
+            sections.append("Alertas priorizados:\n" + "\n".join(f"- {alert}" for alert in alerts))
+    if not sections:
+        sections.append("Sem informacoes clinicas registradas ainda.")
+    return "\n\n".join(sections)
+
+
 CLINICAL_DISCLAIMER = (
     "Aviso: interpretacoes automatizadas complementam o parecer medico humano e nao substituem atendimento presencial."
 )
@@ -2159,6 +2187,19 @@ def render_patient_panel() -> None:
         current_history = {}
     triage_seed = st.session_state.get("hackathon_triage_payload") or example_triage_payload()
 
+    action_col1, action_col2 = st.columns(2)
+    with action_col1:
+        if st.button("Carregar exemplo oficial", key="load_patient_example"):
+            st.session_state.hackathon_triage_payload = example_triage_payload()
+            st.session_state.hackathon_triage_report = None
+            st.rerun()
+    with action_col2:
+        if st.button("Limpar dados do paciente", key="clear_patient_form"):
+            st.session_state.demographics = {}
+            st.session_state.hackathon_triage_payload = {}
+            st.session_state.hackathon_triage_report = None
+            st.rerun()
+
     history_catalog = {
         "Insuficiencia cardiaca": "congestive_heart_failure",
         "Hipertensao": "hypertension",
@@ -2821,6 +2862,36 @@ def render_history() -> None:
         )
 
 
+def render_report_viewer() -> None:
+    st.markdown("### Visualizacao do relatorio")
+    report_text = build_final_report_text()
+    st.text_area(
+        "Resumo consolidado (.txt)",
+        value=report_text,
+        height=260,
+        disabled=True,
+    )
+    st.download_button(
+        "Baixar relatorio completo (.txt)",
+        data=report_text.encode("utf-8"),
+        file_name="medIA_relatorio.txt",
+        mime="text/plain",
+        use_container_width=True,
+    )
+    hackathon_report = st.session_state.get("hackathon_triage_report")
+    if hackathon_report:
+        report_dict = (
+            hackathon_report.to_dict()
+            if hasattr(hackathon_report, "to_dict")
+            else hackathon_report
+        )
+        score = report_dict.get("processamento", {}).get("pontuacao", 0)
+        st.progress(min(score / 3, 1.0))
+        with st.expander("Relatorio completo (JSON)", expanded=False):
+            st.json(report_dict)
+    else:
+        st.caption("Nenhuma triagem automática gerada ainda.")
+
 def render_primary_workspace() -> None:
     groq_api_key = os.environ.get("GROQ_API_KEY")
     if not groq_api_key:
@@ -3175,7 +3246,7 @@ def main() -> None:
     st.set_page_config(
         page_title="MedIA",
         page_icon="🩺",
-        layout="centered",
+        layout="wide",
     )
 
     st.title("MedIA")
@@ -3191,10 +3262,13 @@ def main() -> None:
     apply_theme_settings()
     render_sidebar()
 
-    main_col, patient_col = st.columns([3.0, 1.2], gap="large")
+    main_col, patient_col, report_col = st.columns([2.6, 1.5, 1.1], gap="large")
 
     with patient_col:
         render_patient_panel()
+
+    with report_col:
+        render_report_viewer()
 
     with main_col:
         render_primary_workspace()
