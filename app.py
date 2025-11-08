@@ -3269,11 +3269,7 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
             enriched_response = st.session_state.validator.attach_disclaimer(response, context_meta)
             confidence_result = st.session_state.confidence_calibrator.score(enriched_response, context_meta)
             st.session_state.confidence_history.append(confidence_result)
-            final_response = (
-                f"{enriched_response}\n\n"
-                f"_Confianca estimada na resposta: {confidence_result['label']} "
-                f"({confidence_result['score']})._"
-            )
+            final_response = enriched_response
 
             education_hits = st.session_state.education_manager.recommend_from_text(
                 text=f"{user_input}\n{final_response}"
