@@ -2932,13 +2932,9 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
             confidence_result = st.session_state.confidence_calibrator.score(enriched_response, context_meta)
             st.session_state.confidence_history.append(confidence_result)
             final_response = (
-<<<<<<< HEAD
-                f"{enriched_response}\n\nConfianca estimada: {confidence_result['label']} "
-                f"({confidence_result['score']})."
-=======
                 f"{enriched_response}\n\n"
                 f"_Confianca estimada na resposta: {confidence_result['label']} "
->>>>>>> 997e6222a5f38c6b7a88badb9bf98c3b87b98a5f
+                f"({confidence_result['score']})._"
             )
 
             education_hits = st.session_state.education_manager.recommend_from_text(
