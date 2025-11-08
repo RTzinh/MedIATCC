@@ -44,9 +44,16 @@ except ImportError:  # pragma: no cover
     gTTS = None
 
 try:
-    import google.generativeai as genai  # type: ignore
+    from google import genai as google_genai  # type: ignore
+    from google.genai import types as google_genai_types  # type: ignore
 except ImportError:  # pragma: no cover
-    genai = None
+    google_genai = None
+    google_genai_types = None
+
+try:
+    import google.generativeai as legacy_genai  # type: ignore
+except ImportError:  # pragma: no cover
+    legacy_genai = None
 
 try:
     import qrcode  # type: ignore
@@ -189,7 +196,10 @@ DEFAULT_GEMINI_API_KEY = (
     or os.environ.get("GOOGLE_API_KEY")
     or "AIzaSyCag_eYIGTTZfw-xSUw8iERcNuroOZO7G4"
 )
-DEFAULT_GEMINI_MODEL = os.environ.get("GEMINI_MODEL_NAME", "gemini-1.5-flash")
+DEFAULT_GEMINI_MODEL = os.environ.get(
+    "GEMINI_MODEL_NAME",
+    "models/gemini-1.5-flash",
+)
 VOICE_AGENT_INSTRUCTIONS = (
     "Voce e o agente de voz do MedIA. Transcreva falas em portugues e ofereca orientacoes medicas de apoio, "
     "reforcando que o paciente deve buscar atendimento presencial em situacoes criticas. Use linguagem simples, "
@@ -251,6 +261,10 @@ def sanitize_numeric(value: float) -> Optional[float]:
     if value and value > 0:
         return float(value)
     return None
+
+
+def gemini_sdk_available() -> bool:
+    return google_genai is not None or legacy_genai is not None
 
 
 CLINICAL_DISCLAIMER = (
@@ -2015,23 +2029,36 @@ class GeminiVoiceAgent:
     ) -> None:
         self.api_key = api_key or DEFAULT_GEMINI_API_KEY
         self.model_name = model_name
-        self._model: Optional[Any] = None
+        self._client: Optional[Any] = None
+        self._legacy_model: Optional[Any] = None
+        self._using_files_api = False
         self.last_error: Optional[str] = None
 
     def available(self) -> bool:
-        return bool(self.api_key and genai is not None)
+        return bool(self.api_key and gemini_sdk_available())
 
-    def _ensure_model(self) -> None:
+    def _legacy_model_name(self) -> str:
+        if self.model_name.startswith("models/"):
+            return self.model_name.split("/", 1)[1]
+        return self.model_name
+
+    def _ensure_backend(self) -> None:
         if not self.available():
             raise RuntimeError(
                 "Gemini Voice Agent indisponivel (biblioteca ou chave ausente)."
             )
-        if self._model is None:
-            genai.configure(api_key=self.api_key)
-            self._model = genai.GenerativeModel(
-                model_name=self.model_name,
+        if self._client or self._legacy_model:
+            return
+        if google_genai is not None:
+            self._client = google_genai.Client(api_key=self.api_key)
+        elif legacy_genai is not None:
+            legacy_genai.configure(api_key=self.api_key)
+            self._legacy_model = legacy_genai.GenerativeModel(
+                model_name=self._legacy_model_name(),
                 system_instruction=VOICE_AGENT_INSTRUCTIONS,
             )
+        else:  # pragma: no cover
+            raise RuntimeError("SDK Gemini nao instalado.")
 
     def transcribe_and_respond(
         self,
@@ -2039,32 +2066,55 @@ class GeminiVoiceAgent:
         audio: bytes,
         mime_type: str = "audio/wav",
     ) -> Dict[str, Any]:
-        self._ensure_model()
+        self._ensure_backend()
         start = time.time()
         try:
-            response = self._model.generate_content(
-                [
-                    {
-                        "role": "user",
-                        "parts": [
-                            {"mime_type": mime_type, "data": audio},
-                            {"text": VOICE_AGENT_RESPONSE_SCHEMA},
-                        ],
-                    }
-                ],
-                generation_config={
-                    "temperature": 0.5,
-                    "top_p": 0.95,
-                    "max_output_tokens": 1024,
-                    "response_mime_type": "application/json",
-                },
-                request_options={"timeout": 60},
-            )
+            if self._client is not None and google_genai_types is not None:
+                prompt = (
+                    f"{VOICE_AGENT_INSTRUCTIONS}\n\n{VOICE_AGENT_RESPONSE_SCHEMA}\n"
+                    "Quando nao houver fala, informe explicitamente em portugues."
+                )
+                audio_part = google_genai_types.Part.from_bytes(
+                    data=audio,
+                    mime_type=mime_type,
+                )
+                response = self._client.models.generate_content(
+                    model=self.model_name,
+                    contents=[prompt, audio_part],
+                    config={
+                        "temperature": 0.4,
+                        "top_p": 0.9,
+                        "max_output_tokens": 1024,
+                        "response_mime_type": "application/json",
+                    },
+                )
+                raw_text = getattr(response, "text", "") or ""
+            elif self._legacy_model is not None:
+                response = self._legacy_model.generate_content(
+                    [
+                        {
+                            "role": "user",
+                            "parts": [
+                                {"mime_type": mime_type, "data": audio},
+                                {"text": VOICE_AGENT_RESPONSE_SCHEMA},
+                            ],
+                        }
+                    ],
+                    generation_config={
+                        "temperature": 0.5,
+                        "top_p": 0.95,
+                        "max_output_tokens": 1024,
+                        "response_mime_type": "application/json",
+                    },
+                    request_options={"timeout": 60},
+                )
+                raw_text = getattr(response, "text", "") or ""
+            else:  # pragma: no cover
+                raise RuntimeError("Nenhum backend Gemini configurado.")
         except Exception as exc:
             self.last_error = str(exc)
             raise
         latency = time.time() - start
-        raw_text = getattr(response, "text", "") or ""
         try:
             payload = json.loads(raw_text)
         except json.JSONDecodeError:
@@ -2083,7 +2133,7 @@ class GeminiVoiceAgent:
 
 
 def get_voice_agent() -> Optional[GeminiVoiceAgent]:
-    if genai is None:
+    if not gemini_sdk_available():
         return None
     agent = st.session_state.get("voice_agent")
     if not isinstance(agent, GeminiVoiceAgent):
@@ -2509,9 +2559,9 @@ def render_voice_agent_panel() -> None:
         unsafe_allow_html=True,
     )
 
-    if genai is None:
+    if not gemini_sdk_available():
         st.warning(
-            "Instale o SDK oficial com `pip install google-generativeai` para habilitar o agente de voz."
+            "Instale `google-genai` (SDK oficial) ou `google-generativeai` para habilitar o agente de voz."
         )
         return
 
@@ -2543,26 +2593,33 @@ def render_voice_agent_panel() -> None:
             st.session_state.voice_agent_status = "Histórico de voz reiniciado."
             st.success("Histórico do agente de voz limpo.")
 
-    if send_voice:
-        if audio_file is None:
-            st.warning("Grave uma mensagem antes de enviar.")
-        else:
-            audio_bytes = audio_file.getvalue()
-            mime_type = audio_file.type or "audio/wav"
-            try:
-                with st.spinner("Conversando com o Gemini..."):
-                    result = agent.transcribe_and_respond(
-                        audio=audio_bytes,
-                        mime_type=mime_type,
-                    )
-            except Exception as exc:
-                st.session_state.voice_agent_status = f"Erro ao acionar Gemini: {exc}"
-                st.error(
-                    "Não foi possível entender o áudio agora. Verifique a conexão e tente novamente."
-                )
+        if send_voice:
+            if audio_file is None:
+                st.warning("Grave uma mensagem antes de enviar.")
             else:
-                transcript = result.get("transcription", "")
-                reply = result.get("assistant_reply", "")
+                audio_bytes = audio_file.getvalue()
+                mime_type = audio_file.type or "audio/wav"
+                try:
+                    with st.spinner("Conversando com o Gemini..."):
+                        result = agent.transcribe_and_respond(
+                            audio=audio_bytes,
+                            mime_type=mime_type,
+                        )
+                except Exception as exc:
+                    error_text = str(exc)
+                    st.session_state.voice_agent_status = f"Erro ao acionar Gemini: {error_text}"
+                    if "404" in error_text and "models" in error_text:
+                        st.error(
+                            "Modelo Gemini não encontrado para esta API. Confira os nomes suportados executando "
+                            "`client.models.list()` ou defina `GEMINI_MODEL_NAME=models/gemini-1.5-flash`."
+                        )
+                    else:
+                        st.error(
+                            "Não foi possível entender o áudio agora. Verifique a conexão e tente novamente."
+                        )
+                else:
+                    transcript = result.get("transcription", "")
+                    reply = result.get("assistant_reply", "")
                 latency = result.get("latency", 0.0)
                 entry: Dict[str, Any] = {
                     "patient": transcript,
