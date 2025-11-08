@@ -198,7 +198,7 @@ DEFAULT_GEMINI_API_KEY = (
 )
 DEFAULT_GEMINI_MODEL = os.environ.get(
     "GEMINI_MODEL_NAME",
-    "models/gemini-1.5-flash",
+    "models/gemini-2.5-flash",
 )
 VOICE_AGENT_INSTRUCTIONS = (
     "Voce e o agente de voz do MedIA. Transcreva falas em portugues e ofereca orientacoes medicas de apoio, "
@@ -2554,6 +2554,9 @@ def render_voice_agent_panel() -> None:
                 Grave uma mensagem curta e deixe o Gemini AI Studio transcrever e responder em tempo real.
                 A transcrição é enviada para o chat principal para manter todo mundo sincronizado.
             </p>
+            <p style='font-size:0.8em; color:#94a3b8; margin:0 auto; max-width:520px;'>
+                Usa o modelo <strong>gemini-2.5-flash</strong> (1,048,576 tokens de entrada, 65,536 de saída) compatível com texto, imagem, vídeo e áudio.
+            </p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -2599,6 +2602,9 @@ def render_voice_agent_panel() -> None:
             else:
                 audio_bytes = audio_file.getvalue()
                 mime_type = audio_file.type or "audio/wav"
+                result: Optional[Dict[str, Any]] = None
+                transcript = ""
+                reply = ""
                 try:
                     with st.spinner("Conversando com o Gemini..."):
                         result = agent.transcribe_and_respond(
@@ -2617,27 +2623,27 @@ def render_voice_agent_panel() -> None:
                         st.error(
                             "Não foi possível entender o áudio agora. Verifique a conexão e tente novamente."
                         )
-                else:
+                if result:
                     transcript = result.get("transcription", "")
                     reply = result.get("assistant_reply", "")
-                latency = result.get("latency", 0.0)
-                entry: Dict[str, Any] = {
-                    "patient": transcript,
-                    "agent": reply,
-                    "latency": latency,
-                }
-                audio_answer = generate_tts_audio(reply) if reply else None
-                if audio_answer:
-                    entry["audio"] = audio_answer
-                history = list(st.session_state.voice_conversation)
-                history.append(entry)
-                st.session_state.voice_conversation = history[-6:]
-                st.session_state.voice_agent_status = (
-                    f"Última resposta em {latency:.1f}s usando {agent.model_name}."
-                )
-                if transcript:
-                    st.session_state.pending_voice_input = transcript
-                    st.info("Transcrição enviada automaticamente para o chat principal.")
+                    latency = result.get("latency", 0.0)
+                    entry: Dict[str, Any] = {
+                        "patient": transcript,
+                        "agent": reply,
+                        "latency": latency,
+                    }
+                    audio_answer = generate_tts_audio(reply) if reply else None
+                    if audio_answer:
+                        entry["audio"] = audio_answer
+                    history = list(st.session_state.voice_conversation)
+                    history.append(entry)
+                    st.session_state.voice_conversation = history[-6:]
+                    st.session_state.voice_agent_status = (
+                        f"Última resposta em {latency:.1f}s usando {agent.model_name}."
+                    )
+                    if transcript:
+                        st.session_state.pending_voice_input = transcript
+                        st.info("Transcrição enviada automaticamente para o chat principal.")
 
     if st.session_state.voice_agent_status:
         st.caption(st.session_state.voice_agent_status)
@@ -2944,13 +2950,16 @@ def main() -> None:
         "Mantenha o dialogo aberto apos concluir as perguntas, dando continuidade a duvidas ou novas solicitacoes sem forcar reinicio."
     )
 
-    triage_tab, hackathon_tab, patient_tab, insights_tab = st.tabs(
-        ["Triagem", "Hackathon", "Painel do paciente", "Insights"]
+    triage_tab, patient_tab, insights_tab = st.tabs(
+        ["Triagem", "Painel do paciente", "Insights"]
     )
 
     with triage_tab:
         render_voice_agent_panel()
         render_quick_prompt_bar()
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        render_hackathon_triage_tab()
         st.markdown("<br>", unsafe_allow_html=True)
 
         render_history()
@@ -3268,8 +3277,6 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
                     st.warning("gTTS nao disponivel ou falha ao gerar audio.")
 
             st.rerun()
-    with hackathon_tab:
-        render_hackathon_triage_tab()
     with patient_tab:
         render_patient_dashboard()
 
