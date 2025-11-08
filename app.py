@@ -2503,7 +2503,7 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
             confidence_result = st.session_state.confidence_calibrator.score(enriched_response, context_meta)
             st.session_state.confidence_history.append(confidence_result)
             final_response = (
-                f"{enriched_response}\n\nConfianca estimada: {confidence_result['label']} "
+                f"{enriched_response}\n\n"
                 f"({confidence_result['score']})."
             )
 
