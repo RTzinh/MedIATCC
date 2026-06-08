@@ -47,13 +47,13 @@ class DICOMAnalyzer:
             frames = details.get("frames", 0)
         else:
             meta_summary.append(
-                "pydicom nao instalado; analise limitada ao checksum heuristico."
+                "pydicom not installed; analysis limited to a heuristic checksum."
             )
 
         digest = hashlib.sha256(content).hexdigest()
         confidence = round(int(digest[:2], 16) / 255, 2)
         cad_flags.append(
-            f"Heuristica de priorizacao: score {confidence}; revisar manualmente."
+            f"Prioritization heuristic: score {confidence}; review manually."
         )
 
         payload = {
@@ -78,7 +78,7 @@ class DICOMAnalyzer:
                         }
                     )
             except Exception as exc:  # pragma: no cover - defensive
-                payload.setdefault("cad_flags", []).append(f"Serviço externo falhou: {exc}")
+                payload.setdefault("cad_flags", []).append(f"External service failed: {exc}")
         self._cache[file_id] = payload
         return payload
 
@@ -92,7 +92,7 @@ class DICOMAnalyzer:
     def _process_zip(self, content: bytes) -> Dict[str, Any]:
         with zipfile.ZipFile(io.BytesIO(content)) as archive:
             members = archive.namelist()
-            meta_summary = [f"Estudo ZIP com {len(members)} objetos."]
+            meta_summary = [f"ZIP study with {len(members)} objects."]
             cad_flags: List[str] = []
             frames = 0
             if pydicom:
@@ -106,9 +106,9 @@ class DICOMAnalyzer:
                         cad_flags.extend(details.get("cad_flags", []))
                         frames += details.get("frames", 0)
                     except Exception as exc:  # pragma: no cover - defensive
-                        cad_flags.append(f"Falha ao interpretar {name}: {exc}")
+                        cad_flags.append(f"Failed to parse {name}: {exc}")
             else:
-                cad_flags.append("Instale `pydicom` para leitura detalhada de DICOM.")
+                cad_flags.append("Install `pydicom` for detailed DICOM reading.")
             return {
                 "meta_summary": meta_summary,
                 "cad_flags": cad_flags,
@@ -121,36 +121,36 @@ class DICOMAnalyzer:
         frames = 0
         if not pydicom:
             return {
-                "meta_summary": ["pydicom indisponivel; leitura nativa desativada."],
+                "meta_summary": ["pydicom unavailable; native reading disabled."],
                 "cad_flags": [],
                 "frames": 0,
             }
         try:
             dataset = pydicom.dcmread(io.BytesIO(content))
-            patient_position = getattr(dataset, "PatientPosition", "N/D")
-            study_desc = getattr(dataset, "StudyDescription", "Sem descricao")
-            series_desc = getattr(dataset, "SeriesDescription", "Sem serie")
-            modality = getattr(dataset, "Modality", "N/D")
+            patient_position = getattr(dataset, "PatientPosition", "N/A")
+            study_desc = getattr(dataset, "StudyDescription", "No description")
+            series_desc = getattr(dataset, "SeriesDescription", "No series")
+            modality = getattr(dataset, "Modality", "N/A")
             rows = getattr(dataset, "Rows", 0)
             cols = getattr(dataset, "Columns", 0)
             frames = getattr(dataset, "NumberOfFrames", 1) or 1
 
             meta_summary.extend(
                 [
-                    f"Mod: {modality} | Estudo: {study_desc} | Serie: {series_desc}",
-                    f"Posicionamento: {patient_position} | {rows}x{cols}px | frames={frames}",
+                    f"Mod: {modality} | Study: {study_desc} | Series: {series_desc}",
+                    f"Positioning: {patient_position} | {rows}x{cols}px | frames={frames}",
                 ]
             )
 
             if modality == "CR" and rows and cols:
                 if rows < 1500 or cols < 1500:
-                    cad_flags.append("Resolucao abaixo do padrao de RX toracico (1500px).")
+                    cad_flags.append("Resolution below the chest X-ray standard (1500px).")
                 if rows > cols:
-                    cad_flags.append("Projecao sugere AP/PA; correlacione com laudo clinico.")
+                    cad_flags.append("Projection suggests AP/PA; correlate with the clinical report.")
             if modality in {"CT", "MR"}:
-                cad_flags.append("Estudo volumetrico detectado; CAD nao implementado.")
+                cad_flags.append("Volumetric study detected; CAD not implemented.")
         except Exception as exc:  # pragma: no cover - defensive
-            cad_flags.append(f"Falha no parsing DICOM: {exc}")
+            cad_flags.append(f"DICOM parsing failed: {exc}")
         return {
             "meta_summary": meta_summary,
             "cad_flags": cad_flags,

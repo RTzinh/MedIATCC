@@ -11,19 +11,19 @@ signature documented below.
 
   * `exam`: raw exam payload created by the upload pipeline.
   * `normalized`: dict with structured lab values.
-  * `alerts`: list of alerts previously detectados (each item dict).
-  * `demographics`: dict com dados do paciente (idade, sexo, etc.).
-  * return: dict com campos opcionais `notes`, `alerts`, `extras`.
+  * `alerts`: list of previously detected alerts (each item a dict).
+  * `demographics`: dict with patient data (age, sex, etc.).
+  * return: dict with optional fields `notes`, `alerts`, `extras`.
 
 - CAD handler signature::
 
       def handler(*, file_id, content, metadata) -> Dict[str, Any]
 
-  * `file_id`: identificador do arquivo/imagem.
-  * `content`: bytes binários originais do DICOM/zip.
-  * `metadata`: payload heurístico calculado pelo app.
-  * return: dict com chaves `meta_summary`, `cad_flags`, `frames`, `hash`,
-    e opcionalmente `extras`.
+  * `file_id`: file/image identifier.
+  * `content`: original binary bytes of the DICOM/zip.
+  * `metadata`: heuristic payload computed by the app.
+  * return: dict with keys `meta_summary`, `cad_flags`, `frames`, `hash`,
+    and optionally `extras`.
 """
 
 from __future__ import annotations

@@ -3,9 +3,9 @@
 This module keeps the core logic decoupled from the Streamlit UI so it can be
 reused by scripts or APIs. The pipeline follows the stages:
 
-1. Coleta (collection): validates and normalizes clinical inputs.
-2. Processamento: runs rule-based analyses with an audit trail for interpretability.
-3. Relatorio: produces a structured summary with alerts and recommendations.
+1. Collection: validates and normalizes clinical inputs.
+2. Processing: runs rule-based analyses with an audit trail for interpretability.
+3. Report: produces a structured summary with alerts and recommendations.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import datetime as _dt
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
-RISK_LEVELS = ["Baixo", "Moderado", "Alto", "Critico"]
+RISK_LEVELS = ["Low", "Moderate", "High", "Critical"]
 
 
 @dataclass
@@ -25,7 +25,7 @@ class NursingTriageInput:
     temperature: Optional[float] = None
     spo2: Optional[float] = None
     age: Optional[int] = None
-    sex: str = "Nao informado"
+    sex: str = "Not informed"
     chronic_conditions: List[str] = field(default_factory=list)
     allergies: List[str] = field(default_factory=list)
     blood_type: Optional[str] = None
@@ -53,15 +53,15 @@ class TriagePipelineOutput:
         alerts = relatorio.get("alertas", [])
         recomendacoes = relatorio.get("encaminhamentos", [])
         lines = [
-            f"**Prioridade:** {relatorio.get('prioridade', 'N/D')}  ",
-            f"**Classificacao de risco:** {relatorio.get('risco', 'N/D')}  ",
-            f"**Justificativa principal:** {relatorio.get('justificativa', 'Sem justificativa registrada.')}  ",
+            f"**Priority:** {relatorio.get('prioridade', 'N/A')}  ",
+            f"**Risk classification:** {relatorio.get('risco', 'N/A')}  ",
+            f"**Main rationale:** {relatorio.get('justificativa', 'No rationale recorded.')}  ",
         ]
         if alerts:
-            lines.append("**Alertas identificados:**")
+            lines.append("**Identified alerts:**")
             lines.extend([f"- {alert}" for alert in alerts])
         if recomendacoes:
-            lines.append("**Encaminhamentos sugeridos:**")
+            lines.append("**Suggested referrals:**")
             lines.extend([f"- {item}" for item in recomendacoes])
         return "\n".join(lines)
 
@@ -86,41 +86,41 @@ def generate_triage_report(payload: NursingTriageInput) -> TriagePipelineOutput:
     # Blood pressure
     if payload.systolic and payload.diastolic:
         if payload.systolic >= 180 or payload.diastolic >= 120:
-            add_alert("PA", "Pressao critica compativel com urgencia hipertensiva.", 3)
-            suggested_actions.append("Encaminhar imediatamente para sala de emergencia.")
+            add_alert("BP", "Critical blood pressure consistent with hypertensive emergency.", 3)
+            suggested_actions.append("Refer immediately to the emergency room.")
         elif payload.systolic >= 160 or payload.diastolic >= 100:
-            add_alert("PA", "Pressao muito elevada requer avaliacao medica rapida.", 2)
-            suggested_actions.append("Priorizar consulta medica nas proximas 2 horas.")
+            add_alert("BP", "Very high blood pressure requires a quick medical evaluation.", 2)
+            suggested_actions.append("Prioritize a medical consultation within the next 2 hours.")
         elif payload.systolic <= 90 or payload.diastolic <= 60:
-            add_alert("PA", "Pressao baixa detectada; descartar choque ou hipovolemia.", 2)
-            suggested_exams.append("Repetir PA e avaliar sinais de choque.")
+            add_alert("BP", "Low blood pressure detected; rule out shock or hypovolemia.", 2)
+            suggested_exams.append("Repeat BP measurement and assess signs of shock.")
 
     # Heart rate
     if payload.heart_rate:
         if payload.heart_rate >= 130:
-            add_alert("FC", "Taquicardia acentuada pode indicar instabilidade hemodinamica.", 3)
+            add_alert("HR", "Marked tachycardia may indicate hemodynamic instability.", 3)
         elif payload.heart_rate >= 110:
-            add_alert("FC", "Taquicardia moderada observada.", 2)
+            add_alert("HR", "Moderate tachycardia observed.", 2)
         elif payload.heart_rate <= 50:
-            add_alert("FC", "Bradicardia requer investigacao.", 2)
+            add_alert("HR", "Bradycardia requires investigation.", 2)
 
     # Temperature
     if payload.temperature:
         if payload.temperature >= 39:
-            add_alert("Temperatura", "Febre alta sugere quadro infeccioso grave.", 2)
-            suggested_exams.append("Solicitar hemograma/ PCR conforme protocolo.")
+            add_alert("Temperature", "High fever suggests a severe infectious condition.", 2)
+            suggested_exams.append("Order a CBC / CRP according to protocol.")
         elif payload.temperature <= 35:
-            add_alert("Temperatura", "Hipotermia detectada.", 3)
+            add_alert("Temperature", "Hypothermia detected.", 3)
 
     # Oxygen saturation
     if payload.spo2:
         if payload.spo2 < 90:
-            add_alert("SpO2", "Saturacao abaixo de 90% indica hipoxemia importante.", 3)
-            suggested_actions.append("Iniciar oxigenoterapia e acionar equipe medica.")
+            add_alert("SpO2", "Saturation below 90% indicates significant hypoxemia.", 3)
+            suggested_actions.append("Start oxygen therapy and call the medical team.")
         elif payload.spo2 < 94:
-            add_alert("SpO2", "Saturacao levemente reduzida, monitorar.", 2)
+            add_alert("SpO2", "Slightly reduced saturation, monitor.", 2)
 
-    # Symptoms
+    # Symptoms (keys match the patient's Portuguese symptom input)
     symptom_flags = {
         "dor no peito": 3,
         "falta de ar": 3,
@@ -134,38 +134,38 @@ def generate_triage_report(payload: NursingTriageInput) -> TriagePipelineOutput:
     for symptom in payload.sanitized_symptoms():
         for keyword, severity in symptom_flags.items():
             if keyword in symptom:
-                add_alert("Sintomas", f"Sintoma relatado: {symptom}.", severity)
+                add_alert("Symptoms", f"Reported symptom: {symptom}.", severity)
                 if severity >= 3:
-                    suggested_actions.append("Acionar protocolo de emergencia.")
+                    suggested_actions.append("Activate the emergency protocol.")
                 break
 
-    # Chronic diseases
+    # Chronic diseases (matched against Portuguese chronic-condition input)
     chronic = [c.lower() for c in payload.chronic_conditions]
     if any(d in chronic for d in ("diabetes", "cardiopatia", "insuficiencia cardiaca")):
-        suggested_exams.append("Verificar glicemia capilar e ECG basico.")
+        suggested_exams.append("Check capillary blood glucose and a basic ECG.")
     if "asma" in chronic or "dpoc" in chronic:
-        suggested_actions.append("Avaliar pico de fluxo expiratorio.")
+        suggested_actions.append("Assess peak expiratory flow.")
 
     # Allergies/meds
     if payload.allergies:
-        alerts.append("Alergias registradas: " + ", ".join(payload.allergies))
+        alerts.append("Recorded allergies: " + ", ".join(payload.allergies))
     if payload.medications:
-        suggested_exams.append("Conferir interacoes com medicacoes em uso continuo.")
+        suggested_exams.append("Check interactions with continuous-use medications.")
 
     prioritized_actions = list(dict.fromkeys(suggested_actions))
     prioritized_exams = list(dict.fromkeys(suggested_exams))
 
     risk_label = RISK_LEVELS[risk_score]
     priority = {
-        "Baixo": "Atendimento programado",
-        "Moderado": "Avaliacao medica em ate 2h",
-        "Alto": "Atendimento medico imediato",
-        "Critico": "Emergencia / sala vermelha",
+        "Low": "Scheduled care",
+        "Moderate": "Medical evaluation within 2h",
+        "High": "Immediate medical care",
+        "Critical": "Emergency / red room",
     }[risk_label]
     justificativa = (
         audit_trail[-1]["message"]
         if audit_trail
-        else "Sem alertas significativos; manter acompanhamento padrao."
+        else "No significant alerts; keep standard follow-up."
     )
 
     coleta = payload.to_dict()
@@ -180,7 +180,7 @@ def generate_triage_report(payload: NursingTriageInput) -> TriagePipelineOutput:
         "risco": risk_label,
         "prioridade": priority,
         "alertas": alerts,
-        "encaminhamentos": prioritized_actions or ["Manter paciente em observacao de rotina."],
+        "encaminhamentos": prioritized_actions or ["Keep the patient under routine observation."],
         "justificativa": justificativa,
     }
 

@@ -1,70 +1,70 @@
 # MedIA
 
-MedIA e um assistente clinico multimodal construido como Trabalho de Conclusao de Curso por **Ryan Tereciani** e **Reuel Amador Mantovani**.  
-O projeto integra analise de exames, conversacao com IA e um fluxo dedicado ao **Hackathon Saude Inteligente – Triagem Medica com IA**, direcionado a equipes de enfermagem que precisam gerar relatorios rapidos, auditaveis e acionaveis.
+MedIA is a multimodal clinical assistant built as a capstone project (Trabalho de Conclusão de Curso) by **Ryan Tereciani** and **Reuel Amador Mantovani**.
+The project combines exam analysis, AI conversation and a dedicated workflow for the **Smart Health Hackathon – AI Medical Triage**, aimed at nursing teams that need fast, auditable and actionable reports.
 
 ---
 
-## Visao Geral
+## Overview
 
-- Triagem conversacional com Groq (modelos Llama 3.x) e persistencia de contexto medico.
-- Upload e interpretacao de exames laboratoriais e DICOM via `med_modules/`.
-- Painel de voz com Gemini AI Studio para conversas hands-free.
-- Aba “Perfil & triagem” consolidada: captura dados do paciente + sinais vitais e ja dispara o motor do Hackathon.
-- Aba “Relatorio” que produz automaticamente o texto final (com download em `.txt`).
-- Suporte opcional ao Supabase para registrar pacientes, triagens e relatorios auditaveis.
+- Conversational triage powered by Groq (Llama 3.x models) with persistent clinical context.
+- Upload and interpretation of laboratory exams and DICOM studies via `med_modules/`.
+- Voice panel powered by Gemini AI Studio for hands-free conversations.
+- Consolidated "Profile & triage" tab: captures patient data + vital signs and immediately runs the Hackathon engine.
+- "Report" tab that automatically produces the final text (with `.txt` download).
+- Optional Supabase support to register patients, triages and auditable reports.
 
 ---
 
-## Tecnologias
+## Tech Stack
 
 - Python 3.12
 - Streamlit >= 1.25
-- Groq SDK (`groq`) e Google Generative AI (`google-generativeai` / `google-genai`)
+- Groq SDK (`groq`) and Google Generative AI (`google-generativeai` / `google-genai`)
 - PyPDF2, Pillow, pytesseract, pydicom, pyedflib, gTTS
-- Supabase Python client (opcional) para persistencia
+- Supabase Python client (optional) for persistence
 
 ---
 
-## Como Executar
+## How to Run
 
 ```bash
-git clone https://github.com/SEU-USUARIO/MedIATCC.git
+git clone https://github.com/YOUR-USERNAME/MedIATCC.git
 cd MedIATCC
 python -m venv .venv
 .venv\Scripts\activate          # Windows
 pip install -r requirements.txt
 
-set GROQ_API_KEY=seu_token
-set GEMINI_API_KEY=seu_token    # opcional (uma chave de teste ja existe no codigo)
+set GROQ_API_KEY=your_token
+set GEMINI_API_KEY=your_token    # optional (a test key already ships in the code)
 set SUPABASE_URL=https://cwvapgovcsqspaukible.supabase.co
 set SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 streamlit run app.py
 ```
 
-Abra `http://localhost:8501`. As abas “Triagem”, “Perfil & triagem” e “Relatorio” compartilham o mesmo fluxo da nuvem (Streamlit Cloud).
+Open `http://localhost:8501`. The "Triage", "Profile & triage" and "Report" tabs share the same cloud flow (Streamlit Cloud).
 
 ---
 
-## Fluxo do Hackathon
+## Hackathon Workflow
 
-### Dados coletados
+### Collected data
 
-- Pressao arterial, frequencia cardiaca, temperatura, saturacao.
-- Idade, sexo, tipo sanguineo, contato do paciente.
-- Comorbidades, alergias, medicacoes continuas, sintomas relatados.
-- Observacoes livres, uploads de exames e radiografias.
+- Blood pressure, heart rate, temperature, oxygen saturation.
+- Age, sex, blood type, patient contact.
+- Comorbidities, allergies, continuous medications, reported symptoms.
+- Free-text notes, exam uploads and radiographs.
 
-### Processo em camadas
+### Layered process
 
-| Etapa | Descricao |
+| Stage | Description |
 | --- | --- |
-| **Coleta** (`render_patient_panel` + `hackathon.NursingTriageInput`) | Formulario estruturado otimizado para triagens rapidas de enfermagem. |
-| **Processamento** (`generate_triage_report`) | Motor de regras auditavel: gera pontuacao de risco, alertas e encaminhamentos. |
-| **Relatorio** (`render_report_viewer` + `build_final_report_text`) | Sintese textual e JSON com justificativa, alertas e downloads. |
+| **Collection** (`render_patient_panel` + `hackathon.NursingTriageInput`) | Structured form optimized for fast nursing triage. |
+| **Processing** (`generate_triage_report`) | Auditable rule engine: produces a risk score, alerts and referrals. |
+| **Report** (`render_report_viewer` + `build_final_report_text`) | Textual and JSON synthesis with rationale, alerts and downloads. |
 
-### Scripts e exemplos
+### Scripts and examples
 
 - `examples/hackathon_triage_input.json`
 - `examples/hackathon_triage_output.json`
@@ -76,7 +76,7 @@ python scripts/run_triage_example.py \
   --output examples/hackathon_triage_output.json
 ```
 
-### Uso como modulo
+### Use as a module
 
 ```python
 from hackathon import NursingTriageInput, generate_triage_report
@@ -86,7 +86,7 @@ payload = NursingTriageInput(
     diastolic=118,
     heart_rate=126,
     spo2=91,
-    symptoms=["dor no peito", "falta de ar"],
+    symptoms=["chest pain", "shortness of breath"],
 )
 report = generate_triage_report(payload)
 print(report.summary_markdown())
@@ -94,42 +94,44 @@ print(report.summary_markdown())
 
 ---
 
-## Integração com Supabase
+## Supabase Integration
 
-- Configure `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` (em `st.secrets` ou variaveis de ambiente).
-- Ao salvar uma triagem, o app upserta o paciente (`pacientes`), registra a triagem (`triagens`) e salva o resultado (`relatorios_triagem`).
-- Script SQL utilizado para criar as tabelas (fornecido pelo cliente) permanece como referencia oficial.
+- Configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (in `st.secrets` or environment variables).
+- When saving a triage, the app upserts the patient (`pacientes`), records the triage (`triagens`) and stores the result (`relatorios_triagem`).
+- The SQL script used to create the tables (provided by the client) remains the official reference.
+
+> Note: the Supabase table and column names above are kept in Portuguese because they map to the existing database schema.
 
 ---
 
-## Estrutura
+## Structure
 
 ```
-app.py                   # Interface Streamlit
-hackathon.py             # Motor de triagem e classes de dados
-examples/                # JSON de entrada/saida do Hackathon
+app.py                   # Streamlit interface
+hackathon.py             # Triage engine and data classes
+examples/                # Hackathon input/output JSON
 scripts/run_triage_example.py
-med_modules/             # Analises extras (labs, DICOM, etc.)
+med_modules/             # Extra analyses (labs, DICOM, etc.)
 requirements.txt
 README.md
 ```
 
 ---
 
-## Roadmap sugerido
+## Suggested Roadmap
 
-1. Persistir historico completo de triagens e anexos no Supabase (views, dashboards).
-2. Receber sinais vitais em tempo real (wearables) via WebSocket.
-3. Publicar um back-end FastAPI opcional para outras interfaces (mobile, React, etc.).
+1. Persist the full history of triages and attachments in Supabase (views, dashboards).
+2. Receive real-time vital signs (wearables) via WebSocket.
+3. Publish an optional FastAPI back-end for other interfaces (mobile, React, etc.).
 
 ---
 
-## Autores
+## Authors
 
-- Ryan Tereciani  
-- Reuel Amador Mantovani  
-- Paula Morgatto  
-- Raul Pavan  
+- Ryan Tereciani
+- Reuel Amador Mantovani
+- Paula Morgatto
+- Raul Pavan
 - Felipe Bento e Souza
 
-> Projeto academico. Nao substitui avaliacao medica presencial.
+> Academic project. It does not replace an in-person medical evaluation.

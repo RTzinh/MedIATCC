@@ -106,12 +106,12 @@ def safe_show_image(image: Any, caption: Optional[str] = None, **kwargs: Any) ->
     if image is None:
         return
     if isinstance(image, str) and not os.path.exists(image):
-        st.warning("Imagem não está mais disponível nesta sessão.")
+        st.warning("The image is no longer available in this session.")
         return
     try:
         st.image(image, caption=caption, **kwargs)
     except Exception as exc:  # pragma: no cover - defensive fallback
-        st.warning(f"Não foi possível exibir a imagem: {exc}")
+        st.warning(f"Could not display the image: {exc}")
 
 
 def default_hl7_pipeline(
@@ -131,14 +131,14 @@ def default_hl7_pipeline(
             troponin_value = float(troponin)
             threshold = 34.0 if demographics.get("sex") == "M" else 16.0
             if troponin_value > threshold:
-                notes.append("Troponina acima do limite específico por sexo.")
+                notes.append("Troponin above the sex-specific threshold.")
                 extra_alerts.append(
                     {
                         "marker": "troponina",
                         "value": troponin_value,
                         "severity": "alto",
                         "reference": [0, threshold],
-                        "rationale": "Elevação detectada pela pipeline externa.",
+                        "rationale": "Elevation detected by the external pipeline.",
                     }
                 )
         except (TypeError, ValueError):
@@ -148,7 +148,7 @@ def default_hl7_pipeline(
         try:
             hb_value = float(hemoglobina)
             if hb_value < 11:
-                notes.append("Hemoglobina baixa em idoso; sugerir investigação de anemia.")
+                notes.append("Low hemoglobin in an elderly patient; suggest anemia workup.")
         except (TypeError, ValueError):
             pass
     return {"notes": notes, "alerts": extra_alerts}
@@ -162,9 +162,9 @@ def default_cad_handler(
 ) -> Dict[str, Any]:
     """Stub CAD handler; replace with integration to imaging service."""
     updated_meta = list(metadata.get("meta_summary") or [])
-    updated_meta.append("Laudo CAD externo não configurado; exibindo heurística local.")
+    updated_meta.append("External CAD report not configured; showing local heuristic.")
     updated_flags = list(metadata.get("cad_flags") or [])
-    updated_flags.append("Integração CAD aguardando serviço externo.")
+    updated_flags.append("CAD integration awaiting external service.")
     return {
         "meta_summary": updated_meta,
         "cad_flags": updated_flags,
@@ -175,7 +175,7 @@ def default_cad_handler(
 
 
 def register_external_services() -> None:
-    """Configure CAD/HL7 integrations, preferindo handlers externos quando presentes."""
+    """Configure CAD/HL7 integrations, preferring external handlers when present."""
     lab_engine = st.session_state.get("lab_interpreter")
     if lab_engine:
         custom_pipeline = get_lab_pipeline()
@@ -204,31 +204,31 @@ DEFAULT_GEMINI_API_KEY = (
 )
 DEFAULT_GEMINI_MODEL = os.environ.get("GEMINI_MODEL_NAME", "gemini-2.5-flash")
 VOICE_AGENT_INSTRUCTIONS = (
-    "Voce e o agente de voz do MedIA. Transcreva falas em portugues e ofereca orientacoes medicas de apoio, "
-    "reforcando que o paciente deve buscar atendimento presencial em situacoes criticas. Use linguagem simples, "
-    "acolhedora e sem jargoes. Quando nao tiver informacoes suficientes, faca perguntas abertas para entender melhor."
+    "You are the MedIA voice agent. Transcribe the patient's speech and offer supportive medical guidance, "
+    "reinforcing that the patient should seek in-person care in critical situations. Use simple, "
+    "welcoming language without jargon. When you do not have enough information, ask open-ended questions to understand better."
 )
 VOICE_AGENT_RESPONSE_SCHEMA = (
-    "Retorne um JSON valido com as chaves 'transcription' e 'assistant_reply'. "
-    "Em 'transcription' escreva a transcricao literal do paciente. Em 'assistant_reply' forneca a resposta do agente."
+    "Return valid JSON with the keys 'transcription' and 'assistant_reply'. "
+    "In 'transcription' write the patient's verbatim transcription. In 'assistant_reply' provide the agent's response."
 )
 
 QUICK_PROMPTS = [
     {
-        "label": "🌡️ Febre alta",
-        "text": "Estou com febre acima de 39 °C ha dois dias mesmo tomando antitermicos. Quais sinais indicam emergencia?",
+        "label": "🌡️ High fever",
+        "text": "I've had a fever above 39 C for two days even when taking antipyretics. Which signs indicate an emergency?",
     },
     {
-        "label": "❤️ Dor no peito",
-        "text": "Sinto dor aguda no peito que irradia para o braco esquerdo acompanhada de suor frio. O que devo observar?",
+        "label": "❤️ Chest pain",
+        "text": "I feel sharp chest pain radiating to my left arm along with cold sweats. What should I watch for?",
     },
     {
-        "label": "💊 Medicacoes",
-        "text": "Quais cuidados preciso ter ao combinar ibuprofeno com dipirona e um anti-hipertensivo?",
+        "label": "💊 Medications",
+        "text": "What precautions do I need when combining ibuprofen with dipyrone and an antihypertensive?",
     },
     {
-        "label": "📝 Resumo",
-        "text": "Pode resumir nossa conversa e listar exames ou orientacoes que devo seguir nas proximas 24h?",
+        "label": "📝 Summary",
+        "text": "Can you summarize our conversation and list exams or guidance I should follow in the next 24h?",
     },
 ]
 
@@ -274,7 +274,7 @@ def build_final_report_text() -> str:
     sections: List[str] = []
     symptom_report = st.session_state.printable_summary or build_symptom_report()
     if symptom_report:
-        sections.append("Resumo clinico do MedIA:\n" + symptom_report.strip())
+        sections.append("MedIA clinical summary:\n" + symptom_report.strip())
     hackathon_report = st.session_state.get("hackathon_triage_report")
     if hackathon_report:
         summary = (
@@ -289,12 +289,12 @@ def build_final_report_text() -> str:
         )
         summary_text = summary.replace("**", "").replace("_", "")
         if summary_text.strip():
-            sections.append("Triagem de enfermagem:\n" + summary_text.strip())
+            sections.append("Nursing triage:\n" + summary_text.strip())
         alerts = (hack_dict.get("relatorio", {}) if isinstance(hack_dict, dict) else {}).get("alertas")
         if alerts:
-            sections.append("Alertas priorizados:\n" + "\n".join(f"- {alert}" for alert in alerts))
+            sections.append("Prioritized alerts:\n" + "\n".join(f"- {alert}" for alert in alerts))
     if not sections:
-        sections.append("Sem informacoes clinicas registradas ainda.")
+        sections.append("No clinical information recorded yet.")
     return "\n\n".join(sections)
 
 
@@ -344,7 +344,7 @@ def store_triage_in_supabase(
         return
     patient_name = demographics.get("patient_name")
     if not patient_name:
-        st.session_state.supabase_status = "Informe o nome do paciente para salvar no Supabase."
+        st.session_state.supabase_status = "Enter the patient's name to save to Supabase."
         return
     patient_record: Dict[str, Any] = {
         "nome_completo": patient_name,
@@ -390,13 +390,13 @@ def store_triage_in_supabase(
                 "relatorio_json": report_dict,
             }
         ).execute()
-        st.session_state.supabase_status = "Triagem salva no Supabase com sucesso."
+        st.session_state.supabase_status = "Triage saved to Supabase successfully."
     except Exception as exc:
-        st.session_state.supabase_status = f"Falha ao salvar no Supabase: {exc}"
+        st.session_state.supabase_status = f"Failed to save to Supabase: {exc}"
 
 
 CLINICAL_DISCLAIMER = (
-    "Aviso: interpretacoes automatizadas complementam o parecer medico humano e nao substituem atendimento presencial."
+    "Notice: automated interpretations complement the human medical opinion and do not replace in-person care."
 )
 
 CRITICAL_KEYWORDS = {
@@ -413,20 +413,20 @@ CRITICAL_KEYWORDS = {
 
 MEDICATION_DATABASE = {
     "ibuprofeno": {
-        "interactions": ["Pode reduzir o efeito de anti-hipertensivos"],
-        "contra": ["Evitar em doenca renal avancada", "Usar com cautela em gastrite ativa"],
+        "interactions": ["May reduce the effect of antihypertensives"],
+        "contra": ["Avoid in advanced kidney disease", "Use with caution in active gastritis"],
     },
     "dipirona": {
-        "interactions": ["Potencializa anti-hipertensivos e anticoagulantes"],
-        "contra": ["Historico de agranulocitose", "Alergia a pirazolonas"],
+        "interactions": ["Potentiates antihypertensives and anticoagulants"],
+        "contra": ["History of agranulocytosis", "Allergy to pyrazolones"],
     },
     "paracetamol": {
-        "interactions": ["Uso combinado com alcool aumenta risco hepatico"],
-        "contra": ["Doenca hepatica grave sem acompanhamento"],
+        "interactions": ["Combined use with alcohol increases liver risk"],
+        "contra": ["Severe liver disease without monitoring"],
     },
     "amoxicilina": {
-        "interactions": ["Pode reduzir eficacia de contraceptivos orais"],
-        "contra": ["Alergia a penicilinas"],
+        "interactions": ["May reduce the effectiveness of oral contraceptives"],
+        "contra": ["Allergy to penicillins"],
     },
 }
 
@@ -471,70 +471,70 @@ SYMPTOM_HINTS = {
 EDUCATION_LIBRARY = {
     "hipertensao": [
         {
-            "title": "Guia pratico de controle da pressao arterial",
+            "title": "Practical guide to blood pressure control",
             "type": "video",
             "url": "https://www.youtube.com/watch?v=93dnup_pressao",
         },
         {
-            "title": "Infografico: reducao de sodio na dieta",
-            "type": "infografico",
+            "title": "Infographic: reducing dietary sodium",
+            "type": "infographic",
             "url": "https://www.saude.gov/infografico-sodio.pdf",
         },
     ],
     "diabetes": [
         {
-            "title": "Video educativo sobre autocuidado em diabetes tipo 2",
+            "title": "Educational video on self-care in type 2 diabetes",
             "type": "video",
             "url": "https://www.youtube.com/watch?v=84edu_diabetes",
         },
         {
-            "title": "Checklist de monitoramento glicemico domiciliar",
-            "type": "folheto",
+            "title": "Home blood glucose monitoring checklist",
+            "type": "leaflet",
             "url": "https://www.consultorio.ai/assets/folheto-monitoramento.pdf",
         },
     ],
     "saude mental": [
         {
-            "title": "Tecnicas de respiracao para ansiedade",
+            "title": "Breathing techniques for anxiety",
             "type": "audio",
             "url": "https://www.saude.gov/respiracao-guiada.mp3",
         },
         {
-            "title": "Cartilha de sinais de alerta em depressao",
-            "type": "folheto",
+            "title": "Booklet on warning signs of depression",
+            "type": "leaflet",
             "url": "https://www.saude.gov/cartilha-depressao.pdf",
         },
     ],
     "puerperio": [
         {
-            "title": "Cuidados pos-parto imediato",
+            "title": "Immediate postpartum care",
             "type": "video",
             "url": "https://www.youtube.com/watch?v=84puerperio",
         },
         {
-            "title": "Infografico: amamentacao segura",
-            "type": "infografico",
+            "title": "Infographic: safe breastfeeding",
+            "type": "infographic",
             "url": "https://www.saude.gov/infografico-amamentacao.pdf",
         },
     ],
 }
 
 THEME_STYLES = {
-    "Claro": {
+    "Light": {
         "bg": "#f7fbff",
         "panel": "#ffffff",
         "accent": "#2b6cb0",
         "text": "#1a202c",
         "accent_soft": "#dbeafe",
     },
-    "Escuro": {
+    "Dark": {
         "bg": "#0f172a",
         "panel": "#1e293b",
         "accent": "#38bdf8",
         "text": "#f8fafc",
         "accent_soft": "#1e3a8a",
     },
-    "Clinico": {
+    "Clinical": {
         "bg": "#edf7f6",
         "panel": "#ffffff",
         "accent": "#0f766e",
@@ -544,91 +544,91 @@ THEME_STYLES = {
 }
 
 ICON_EMERGENCY = "[URG]"
-ICON_EXAM = "[EXAME]"
-ICON_INTERACTION = "[FARMA]"
+ICON_EXAM = "[EXAM]"
+ICON_INTERACTION = "[PHARMA]"
 ICON_WEARABLE = "[WEAR]"
 ICON_EDUCATION = "[EDU]"
-ICON_STEP = "[TRIAGEM]"
-ICON_IMAGING = "[IMAGEM]"
+ICON_STEP = "[TRIAGE]"
+ICON_IMAGING = "[IMAGING]"
 
 MEDICATION_DISCLAIMER = (
-    "Estas informacoes nao substituem orientacao medica presencial. Consulte seu medico ou farmacêutico."
+    "This information does not replace in-person medical guidance. Consult your physician or pharmacist."
 )
 
 MEDICATION_MONOGRAPHS = {
     "roacutan": {
         "aliases": ["isotretinoina", "isotretinoína", "acutane"],
-        "class": "Retinoide oral para tratamento de acne nodular grave",
+        "class": "Oral retinoid for the treatment of severe nodular acne",
         "indications": [
-            "Acne nodular, conglobata ou resistente a outros tratamentos",
+            "Nodular or conglobate acne, or acne resistant to other treatments",
         ],
         "contra": [
-            "Gravidez e lactacao (teratogenico)",
-            "Insuficiencia hepatica grave",
-            "Hiperlipidemia nao controlada",
-            "Uso concomitante de tetraciclinas",
+            "Pregnancy and lactation (teratogenic)",
+            "Severe liver failure",
+            "Uncontrolled hyperlipidemia",
+            "Concomitant use of tetracyclines",
         ],
         "warnings": [
-            "Obrigatorio programa de contracepcao eficaz em pacientes em idade fertil",
-            "Monitorar transaminases e lipideos periodicamente",
-            "Pode causar ressecamento cutaneo, labial e ocular",
-            "Risco de alteracoes psiquiatricas (depressao, ideacao suicida)",
+            "An effective contraception program is mandatory for patients of childbearing age",
+            "Monitor transaminases and lipids periodically",
+            "May cause skin, lip and eye dryness",
+            "Risk of psychiatric changes (depression, suicidal ideation)",
         ],
-        "dose": "0,5 a 1 mg/kg/dia, via oral, fracionada em 1 a 2 tomadas com alimentos; duracao media de 16 a 24 semanas",
+        "dose": "0.5 to 1 mg/kg/day, orally, split into 1 to 2 doses with food; average duration of 16 to 24 weeks",
         "references": [
-            "Bula oficial: https://www.anvisa.gov.br/datavisa/fila_bula/frmVisualizarBula.asp?pNuTransacao=xxxxx",
-            "Sociedade Brasileira de Dermatologia - Diretrizes de Acne",
+            "Official label: https://www.anvisa.gov.br/datavisa/fila_bula/frmVisualizarBula.asp?pNuTransacao=xxxxx",
+            "Brazilian Society of Dermatology - Acne Guidelines",
         ],
     },
     "ibuprofeno": {
         "aliases": ["ibupr", "brufen", "advil", "motrin"],
-        "class": "Anti-inflamatorio nao esteroide (AINE)",
+        "class": "Nonsteroidal anti-inflammatory drug (NSAID)",
         "indications": [
-            "Dor leve a moderada (cefaleia, dor muscular, pos-operatorio, dismenorreia)",
-            "Processos inflamatorios agudos",
-            "Febre",
+            "Mild to moderate pain (headache, muscle pain, post-operative, dysmenorrhea)",
+            "Acute inflammatory processes",
+            "Fever",
         ],
         "contra": [
-            "Ulcera peptica ativa ou historico recorrente",
-            "Insuficiencia renal grave",
-            "Insuficiencia hepatica grave",
-            "Terceiro trimestre de gestacao",
-            "Asma sensivel a AINEs",
+            "Active peptic ulcer or recurrent history",
+            "Severe kidney failure",
+            "Severe liver failure",
+            "Third trimester of pregnancy",
+            "NSAID-sensitive asthma",
         ],
         "warnings": [
-            "Usar a menor dose eficaz pelo menor tempo possivel",
-            "Pode elevar pressao arterial e reduzir eficacia de anti-hipertensivos",
-            "Associado a risco de eventos cardiovasculares e gastrointestinais",
-            "Monitorar funcao renal em pacientes idosos ou com doencas pre-existentes",
+            "Use the lowest effective dose for the shortest possible time",
+            "May raise blood pressure and reduce the effectiveness of antihypertensives",
+            "Associated with a risk of cardiovascular and gastrointestinal events",
+            "Monitor kidney function in elderly patients or those with pre-existing conditions",
         ],
-        "dose": "200 a 400 mg por via oral a cada 6-8 horas conforme necessidade; dose maxima usual 1200 mg/dia sem supervisao medica",
+        "dose": "200 to 400 mg orally every 6-8 hours as needed; usual maximum dose 1200 mg/day without medical supervision",
         "references": [
-            "Bula oficial: https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=IBUPROFENO",
-            "Diretrizes Sociedade Brasileira de Pediatria - Uso de AINEs",
+            "Official label: https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=IBUPROFENO",
+            "Brazilian Society of Pediatrics Guidelines - Use of NSAIDs",
         ],
     },
     "dipirona": {
         "aliases": ["metamizol", "novalgina", "dipirona sodica", "dipirona sódica"],
-        "class": "Analgésico e antipirético não opioide",
+        "class": "Non-opioid analgesic and antipyretic",
         "indications": [
-            "Dor leve a moderada (cefaleia, dor muscular, pos-operatorio)",
-            "Febre refrataria a outros antipireticos",
+            "Mild to moderate pain (headache, muscle pain, post-operative)",
+            "Fever refractory to other antipyretics",
         ],
         "contra": [
-            "Hipersensibilidade a pirazolonas ou pirazolidinas",
-            "Historico de agranulocitose induzida por dipirona",
-            "Deficiencia de glicose-6-fosfato desidrogenase",
-            "Terceiro trimestre de gestacao (risco de fechamento precoce do ducto arterioso)",
+            "Hypersensitivity to pyrazolones or pyrazolidines",
+            "History of dipyrone-induced agranulocytosis",
+            "Glucose-6-phosphate dehydrogenase deficiency",
+            "Third trimester of pregnancy (risk of premature closure of the ductus arteriosus)",
         ],
         "warnings": [
-            "Monitorar sinais de reacoes hematologicas (agranulocitose, leucopenia)",
-            "Pode causar reacoes anafilaticas graves; usar com cautela em pacientes asmáticos",
-            "Evitar uso cronico sem supervisao medica",
+            "Monitor for signs of hematologic reactions (agranulocytosis, leukopenia)",
+            "May cause severe anaphylactic reactions; use with caution in asthmatic patients",
+            "Avoid chronic use without medical supervision",
         ],
-        "dose": "500 mg a 1 g por via oral a cada 6-8 horas conforme necessidade; dose maxima diaria 4 g em adultos",
+        "dose": "500 mg to 1 g orally every 6-8 hours as needed; maximum daily dose 4 g in adults",
         "references": [
-            "Bula oficial: https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=DIPIRONA",
-            "Manual de condutas clínicas - Ministério da Saúde",
+            "Official label: https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=DIPIRONA",
+            "Clinical Practice Manual - Ministry of Health",
         ],
     },
 }
@@ -656,7 +656,7 @@ def ensure_session_defaults() -> None:
         "confidence_history": [],
         "explainability_notes": [],
         "symptom_log": [],
-        "theme": "Claro",
+        "theme": "Light",
         "font_scale": 1.0,
         "advanced_lab_findings": [],
         "advanced_lab_ids": set(),
@@ -683,7 +683,7 @@ def ensure_session_defaults() -> None:
         "memory_window": 60,
         "memory_messages": [],
         "printable_summary": "",
-        "dashboard_tab": "Sintomas",
+        "dashboard_tab": "Symptoms",
         "triage_mode": False,
         "voice_conversation": [],
         "voice_agent_status": "",
@@ -772,7 +772,7 @@ class ExamPipeline:
             elif item["raw_text"]:
                 lines.append(item["raw_text"][:800])
             if item["notes"]:
-                lines.append(f"Notas: {'; '.join(item['notes'])}")
+                lines.append(f"Notes: {'; '.join(item['notes'])}")
         return "\n".join(lines)
 
     def _extract_content(self, content: bytes, ext: str) -> tuple[str, List[str]]:
@@ -789,17 +789,17 @@ class ExamPipeline:
                 reader = PyPDF2.PdfReader(io.BytesIO(content))
                 text = "\n".join((page.extract_text() or "") for page in reader.pages)
             else:
-                notes.append("PyPDF2 ausente; instale para extrair texto de PDF.")
+                notes.append("PyPDF2 missing; install it to extract text from PDFs.")
         elif ext in {".png", ".jpg", ".jpeg"}:
             if Image and pytesseract:
                 image = Image.open(io.BytesIO(content))
                 text = pytesseract.image_to_string(image, lang="por+eng")
             else:
-                notes.append("OCR indisponivel; instale pillow e pytesseract.")
+                notes.append("OCR unavailable; install pillow and pytesseract.")
         else:
             text = content.decode("utf-8", errors="ignore")
         if not text.strip():
-            notes.append("Conteudo nao extraido; revise manualmente.")
+            notes.append("Content not extracted; review manually.")
         return text, notes
 
     def _normalize(self, text: str, ext: str) -> Dict[str, Any]:
@@ -862,22 +862,22 @@ class RadiographyService:
             return ""
         sections: List[str] = []
         for item in findings:
-            sections.append(f"Radiografia {item['name']}:")
+            sections.append(f"Radiograph {item['name']}:")
             payload = item["payload"]
             impressions = payload.get("impressions") or []
             probabilities = payload.get("probabilities") or {}
             recommendations = payload.get("recommendations") or []
             if impressions:
-                sections.append("Achados: " + ", ".join(impressions))
+                sections.append("Findings: " + ", ".join(impressions))
             if probabilities:
                 formatted = ", ".join(
                     f"{label}={value:.2f}" for label, value in probabilities.items()
                 )
-                sections.append("Probabilidades: " + formatted)
+                sections.append("Probabilities: " + formatted)
             if recommendations:
-                sections.append("Recomendacoes: " + "; ".join(recommendations))
+                sections.append("Recommendations: " + "; ".join(recommendations))
             if item["notes"]:
-                sections.append(f"Notas: {'; '.join(item['notes'])}")
+                sections.append(f"Notes: {'; '.join(item['notes'])}")
         return "\n".join(sections)
 
     def _call_service(self, content: bytes, mime: Optional[str]) -> tuple[Dict[str, Any], List[str]]:
@@ -893,20 +893,20 @@ class RadiographyService:
                 payload = response.json()
                 return payload, notes
             except Exception as exc:  # pragma: no cover
-                notes.append(f"Falha no microservico: {exc}")
+                notes.append(f"Microservice failure: {exc}")
         fallback_score = int(hashlib.md5(content).hexdigest()[:2], 16) / 255
         payload = {
-            "impressions": ["Classificacao heuristica - modo demonstrativo"],
-            "probabilities": {"achado_indeterminado": round(fallback_score, 2)},
+            "impressions": ["Heuristic classification - demo mode"],
+            "probabilities": {"indeterminate_finding": round(fallback_score, 2)},
             "recommendations": [
-                "Encaminhar laudo para radiologista humano.",
-                "Correlacionar achados com exame clinico.",
+                "Refer the report to a human radiologist.",
+                "Correlate findings with the clinical exam.",
             ],
         }
         if not self.base_url:
-            notes.append("Microservico externo nao configurado; usando heuristica local.")
+            notes.append("External microservice not configured; using local heuristic.")
         elif not requests:
-            notes.append("Biblioteca requests ausente; instale para chamar o microservico.")
+            notes.append("requests library missing; install it to call the microservice.")
         return payload, notes
 
 
@@ -915,11 +915,11 @@ class ClinicalValidator:
         disclaimers = [CLINICAL_DISCLAIMER]
         if context.get("critical_flags"):
             disclaimers.append(
-                "Sinais de alerta detectados: " + ", ".join(sorted(set(context["critical_flags"])))
+                "Warning signs detected: " + ", ".join(sorted(set(context["critical_flags"])))
             )
         if context.get("medication_alerts"):
             disclaimers.append(
-                "Alerta farmacologico: " + "; ".join(sorted(set(context["medication_alerts"])))
+                "Pharmacological alert: " + "; ".join(sorted(set(context["medication_alerts"])))
             )
         return f"{response}\n\n{' '.join(disclaimers)}"
 
@@ -931,7 +931,7 @@ class MedicationInteractionChecker:
         for name, data in MEDICATION_DATABASE.items():
             if name in lowered:
                 found.extend(f"{name}: {msg}" for msg in data["interactions"])
-                found.extend(f"{name} contraindicacao: {msg}" for msg in data["contra"])
+                found.extend(f"{name} contraindication: {msg}" for msg in data["contra"])
         return found
 
 
@@ -941,9 +941,9 @@ class EmergencyRouter:
         triggered = [kw for kw in CRITICAL_KEYWORDS if kw in lowered]
         if triggered:
             return (
-                "Possivel emergencia identificada ("
+                "Possible emergency identified ("
                 + ", ".join(triggered)
-                + "). Orientar paciente a acionar 192 (SAMU) ou 190 imediatamente."
+                + "). Advise the patient to call 192 (SAMU) or 190 immediately."
             )
         return None
 
@@ -962,7 +962,7 @@ class HistoryManager:
 
     def _summarize(self, history: List[str]) -> str:
         if not history:
-            return "Sem mensagens registradas."
+            return "No messages recorded."
         text = "\n".join(self._strip_html(item) for item in history[-20:])
         if len(text) > 800:
             return text[:800] + "..."
@@ -1028,13 +1028,13 @@ class ActiveLearningTracker:
                 return {
                     "user": user_text,
                     "bot": bot_text[:500],
-                    "reason": f"Resposta com baixa cobertura: '{pattern}'",
+                    "reason": f"Low-coverage response: '{pattern}'",
                 }
         if user_text.strip().endswith("?") and "?" not in bot_text:
             return {
                 "user": user_text,
                 "bot": bot_text[:500],
-                "reason": "Pergunta direta sem resposta correspondente.",
+                "reason": "Direct question with no matching answer.",
             }
         return None
 
@@ -1059,8 +1059,8 @@ class MultimodalFusionEngine:
             round(int(digest[idx : idx + 2], 16) / 255, 4) for idx in range(0, 10, 2)
         ]
         summary = (
-            f"Fusao multimodal: {len(exam_findings)} exames, "
-            f"{len(imaging_findings)} imagens, dados wearable={'sim' if wearable_payload else 'nao'}."
+            f"Multimodal fusion: {len(exam_findings)} exams, "
+            f"{len(imaging_findings)} images, wearable data={'yes' if wearable_payload else 'no'}."
         )
         return {"signature": digest[:16], "vector": vector, "summary": summary}
 
@@ -1068,22 +1068,22 @@ class MultimodalFusionEngine:
 class ConfidenceCalibrator:
     def score(self, response: str, context: Dict[str, Any]) -> Dict[str, Any]:
         score = 0.45
-        explanation: List[str] = ["Base inicial de 0.45."]
+        explanation: List[str] = ["Initial baseline of 0.45."]
         if context.get("exam_findings"):
             score += 0.15
-            explanation.append("Dados de exames estruturados fornecidos (+0.15).")
+            explanation.append("Structured exam data provided (+0.15).")
         if context.get("imaging_findings"):
             score += 0.15
-            explanation.append("Achados radiologicos presentes (+0.15).")
+            explanation.append("Radiological findings present (+0.15).")
         if context.get("medication_alerts"):
             score += 0.05
-            explanation.append("Consideracao de interacoes medicamentosas (+0.05).")
-        if "Aviso" in response or "orientar" in response.lower():
+            explanation.append("Consideration of drug interactions (+0.05).")
+        if "Notice" in response or "advise" in response.lower():
             score -= 0.05
-            explanation.append("Resposta destaca limitacoes (+/-).")
+            explanation.append("Response highlights limitations (+/-).")
         score = min(max(score, 0.1), 0.95)
-        confidence_label = "alta" if score >= 0.75 else "moderada" if score >= 0.55 else "baixa"
-        explanation.append(f"Nivel de confianca: {confidence_label}.")
+        confidence_label = "high" if score >= 0.75 else "moderate" if score >= 0.55 else "low"
+        explanation.append(f"Confidence level: {confidence_label}.")
         return {
             "score": round(score, 2),
             "label": confidence_label,
@@ -1098,22 +1098,22 @@ class ConversationPlanner:
         state: Dict[str, Any],
     ) -> Dict[str, str]:
         lowered = user_text.lower()
-        stage = "triagem"
-        next_action = "Coletar sintomas adicionais."
+        stage = "triage"
+        next_action = "Collect additional symptoms."
         if any(term in lowered for term in ["resultado", "exame", "laudo"]):
-            stage = "analise-exames"
-            next_action = "Cruzar sintomas com exames enviados."
+            stage = "exam-analysis"
+            next_action = "Cross-reference symptoms with submitted exams."
         if state.get("imaging_findings"):
-            stage = "integracao-imagem"
-            next_action = "Conectar achados de imagem com relato clinico."
+            stage = "image-integration"
+            next_action = "Connect imaging findings with the clinical report."
         if any(term in lowered for term in ["dor intensa", "emergencia", "urgente"]):
-            stage = "emergencia"
-            next_action = "Priorizar orientacao de socorro imediato."
+            stage = "emergency"
+            next_action = "Prioritize immediate emergency guidance."
         if "imc" in lowered:
-            next_action = "Executar calculo de IMC e aguardar nova instrucao."
+            next_action = "Run the BMI calculation and wait for a new instruction."
         plan_prompt = (
-            f"Plano atual: {stage}. Proxima acao: {next_action}. "
-            "Caso ja tenha as 10 perguntas respondidas, sintetizar diagnosticos diferenciais."
+            f"Current plan: {stage}. Next action: {next_action}. "
+            "If the 10 questions have already been answered, synthesize differential diagnoses."
         )
         return {"stage": stage, "next_action": next_action, "plan_prompt": plan_prompt}
 
@@ -1124,13 +1124,13 @@ class ExplainabilityEngine:
         probs = payload.get("probabilities") or {}
         if not probs:
             return (
-                f"Nenhuma probabilidade detalhada informada para {finding.get('name')}."
+                f"No detailed probability provided for {finding.get('name')}."
             )
         ranked = sorted(probs.items(), key=lambda item: item[1], reverse=True)
         top = ", ".join(f"{label}: {value:.2f}" for label, value in ranked[:3])
         return (
-            f"Mapa de calor sugerido para {finding.get('name')}: principais hipoteses {top}. "
-            "Solicitar grad-CAM ao microservico para suporte visual definitivo."
+            f"Suggested heatmap for {finding.get('name')}: main hypotheses {top}. "
+            "Request grad-CAM from the microservice for definitive visual support."
         )
 
 
@@ -1139,7 +1139,7 @@ def truncate_text(value: str, limit: int = 6000) -> str:
         return value
     return (
         value[:limit]
-        + "\n\n[Contexto reduzido automaticamente para manter a compatibilidade com o modelo.]"
+        + "\n\n[Context automatically reduced to keep compatibility with the model.]"
     )
 
 
@@ -1161,7 +1161,7 @@ def predict_with_fallback(client: Groq, model_name: str, messages: List[Dict[str
             continue
     if last_error is not None:
         raise last_error
-    raise BadRequestError("Falha ao gerar resposta apos tentativas de reducao de contexto.")
+    raise BadRequestError("Failed to generate a response after context-reduction attempts.")
 
 
 def _limit_last_user_message(messages: List[Dict[str, str]], limit: int) -> List[Dict[str, str]]:
@@ -1212,17 +1212,17 @@ def get_unique_symptoms(limit: Optional[int] = None) -> List[str]:
 def summarize_symptom_log(items: List[Dict[str, Any]]) -> str:
     tokens = get_unique_symptoms()
     if not tokens:
-        return "Ainda nao registrei sintomas anteriores nesta conversa."
+        return "No previous symptoms recorded in this conversation yet."
     prettified = [token.replace("_", " ").capitalize() for token in tokens]
-    return "Sintomas mencionados anteriormente: " + ", ".join(prettified)
+    return "Previously mentioned symptoms: " + ", ".join(prettified)
 
 
 def build_symptom_report() -> str:
     tokens = get_unique_symptoms()
     if not tokens:
-        return "Sem sintomas registrados no momento."
+        return "No symptoms recorded at the moment."
     prettified = [token.replace("_", " ").capitalize() for token in tokens]
-    return "Sintomas relatados: " + ", ".join(prettified)
+    return "Reported symptoms: " + ", ".join(prettified)
 
 
 def reset_question_progress() -> None:
@@ -1260,28 +1260,28 @@ def generate_medication_response(med_key: str) -> str:
     if not data:
         return ""
     lines = [
-        f"[FARMA] Informacoes essenciais sobre {med_key.capitalize()} ({data.get('class', 'Medicamento')})",
+        f"[PHARMA] Essential information about {med_key.capitalize()} ({data.get('class', 'Medication')})",
         "",
-        "**Indicacoes principais:**",
+        "**Main indications:**",
     ]
     for item in data.get("indications", []):
         lines.append(f"- {item}")
     lines.append("")
-    lines.append("**Contraindicacoes:**")
+    lines.append("**Contraindications:**")
     for item in data.get("contra", []):
         lines.append(f"- {item}")
     lines.append("")
-    lines.append("**Alertas e precaucoes:**")
+    lines.append("**Alerts and precautions:**")
     for item in data.get("warnings", []):
         lines.append(f"- {item}")
     lines.append("")
     dose = data.get("dose")
     if dose:
-        lines.append(f"**Posologia orientativa:** {dose}")
+        lines.append(f"**Suggested dosage:** {dose}")
         lines.append("")
     references = data.get("references", [])
     if references:
-        lines.append("**Referencias confiaveis:**")
+        lines.append("**Reliable references:**")
         for ref in references:
             lines.append(f"- {ref}")
         lines.append("")
@@ -1291,8 +1291,8 @@ def generate_medication_response(med_key: str) -> str:
 
 LAB_RANGES = {
     "hemoglobina": {"low": 12.0, "high": 17.5, "unit": "g/dL", "label": "[hemoglobina]"},
-    "hemacias": {"low": 4.0, "high": 6.0, "unit": "milhoes/mm3", "label": "[hemacias]"},
-    "eritrocitos": {"low": 4.0, "high": 6.0, "unit": "milhoes/mm3", "label": "[eritrocitos]"},
+    "hemacias": {"low": 4.0, "high": 6.0, "unit": "millions/mm3", "label": "[hemacias]"},
+    "eritrocitos": {"low": 4.0, "high": 6.0, "unit": "millions/mm3", "label": "[eritrocitos]"},
     "hematocrito": {"low": 37.0, "high": 52.0, "unit": "%", "label": "[hematocrito]"},
     "leucocitos": {"low": 4000.0, "high": 11000.0, "unit": "/mm3", "label": "[leucocitos]"},
     "leucócitos": {"low": 4000.0, "high": 11000.0, "unit": "/mm3", "label": "[leucocitos]"},
@@ -1379,11 +1379,11 @@ def analyze_exam_item(item: Dict[str, Any]) -> List[str]:
         label = meta["label"]
         if numeric < low:
             findings.append(
-                f"{label}: valor {numeric} abaixo do intervalo ideal ({low}-{high} {meta['unit']}). Sugerir avaliacao clinica."
+                f"{label}: value {numeric} below the ideal range ({low}-{high} {meta['unit']}). Suggest clinical evaluation."
             )
         elif numeric > high:
             findings.append(
-                f"{label}: valor {numeric} acima do intervalo ideal ({low}-{high} {meta['unit']}). Sugerir correlacionar com sintomas."
+                f"{label}: value {numeric} above the ideal range ({low}-{high} {meta['unit']}). Suggest correlating with symptoms."
             )
     return findings
 
@@ -1403,7 +1403,7 @@ def apply_theme_settings() -> None:
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
     }}
     
-    /* Header moderno */
+    /* Modern header */
     h1 {{
         font-weight: 700 !important;
         font-size: 2.5em !important;
@@ -1419,7 +1419,7 @@ def apply_theme_settings() -> None:
         color: {palette['text']} !important;
     }}
     
-    /* Botões modernos */
+    /* Modern buttons */
     .stButton button {{
         border-radius: 12px !important;
         font-weight: 500 !important;
@@ -1433,7 +1433,7 @@ def apply_theme_settings() -> None:
         box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
     }}
     
-    /* Botão de voz especial */
+    /* Special voice button */
     .voice-button {{
         background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%) !important;
         color: white !important;
@@ -1449,7 +1449,7 @@ def apply_theme_settings() -> None:
         transform: scale(1.05) !important;
     }}
     
-    /* Panels melhorados */
+    /* Improved panels */
     .themed-panel {{
         background: {palette['panel']};
         border: 1px solid {palette['accent_soft']};
@@ -1480,7 +1480,7 @@ def apply_theme_settings() -> None:
         opacity: 0.6;
     }}
     
-    /* Badges modernos */
+    /* Modern badges */
     .badge-accent {{
         background: {palette['accent']};
         color: white;
@@ -1491,7 +1491,7 @@ def apply_theme_settings() -> None:
         box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }}
     
-    /* Alertas melhorados */
+    /* Improved alerts */
     .emergency-banner {{
         background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
         border: 2px solid #dc2626;
@@ -1514,7 +1514,7 @@ def apply_theme_settings() -> None:
         box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
     }}
     
-    /* Cards de educação */
+    /* Education cards */
     .education-card {{
         border: 1px solid {palette['accent_soft']};
         border-radius: 14px;
@@ -1530,7 +1530,7 @@ def apply_theme_settings() -> None:
         transform: translateY(-2px);
     }}
     
-    /* Tabs modernos */
+    /* Modern tabs */
     .stTabs [data-baseweb="tab-list"] {{
         background: transparent;
         border-bottom: 2px solid {palette['accent_soft']};
@@ -1567,7 +1567,7 @@ def apply_theme_settings() -> None:
         border-radius: 20px !important;
     }}
     
-    /* Input de chat aprimorado */
+    /* Enhanced chat input */
     div[data-testid="stChatInput"] {{
         position: fixed;
         bottom: 24px;
@@ -1587,7 +1587,7 @@ def apply_theme_settings() -> None:
         font-size: 1em !important;
     }}
     
-    /* Sidebar moderna */
+    /* Modern sidebar */
     section[data-testid="stSidebar"] {{
         background: {palette['panel']} !important;
         border-right: 1px solid {palette['accent_soft']};
@@ -1597,12 +1597,12 @@ def apply_theme_settings() -> None:
         background: {palette['panel']} !important;
     }}
     
-    /* Animações suaves */
+    /* Smooth animations */
     * {{
         transition: background-color 0.3s ease, border-color 0.3s ease;
     }}
     
-    /* Espaçamento */
+    /* Spacing */
     .stChatMessageContainer {{
         padding-bottom: 240px !important;
     }}
@@ -1660,8 +1660,8 @@ def generate_qr_code(content: str) -> Optional[bytes]:
 
 
 def render_patient_dashboard() -> None:
-    st.markdown(f"### {ICON_STEP} Painel do paciente", unsafe_allow_html=True)
-    tabs = st.tabs(["Perfil", "Sintomas", "Exames", "Alertas", "Emergencia", "Insights"])
+    st.markdown(f"### {ICON_STEP} Patient panel", unsafe_allow_html=True)
+    tabs = st.tabs(["Profile", "Symptoms", "Exams", "Alerts", "Emergency", "Insights"])
     with tabs[0]:
         render_patient_profile()
     with tabs[1]:
@@ -1671,7 +1671,7 @@ def render_patient_dashboard() -> None:
             for token in prettified:
                 st.markdown(f"- {token}")
         else:
-            st.caption("Nenhum sintoma registrado ainda.")
+            st.caption("No symptoms recorded yet.")
     with tabs[2]:
         if st.session_state.exam_findings or st.session_state.imaging_findings:
             for item in st.session_state.exam_findings[-5:]:
@@ -1679,13 +1679,13 @@ def render_patient_dashboard() -> None:
             for item in st.session_state.imaging_findings[-5:]:
                 st.markdown(f"- {ICON_IMAGING} {item['name']}")
         else:
-            st.caption("Nenhum exame anexado.")
+            st.caption("No exams attached.")
     with tabs[3]:
         if st.session_state.medication_alerts:
             for alert in st.session_state.medication_alerts[-5:]:
                 st.markdown(f"- {ICON_INTERACTION} {alert}")
         else:
-            st.caption("Nenhum alerta farmacologico no momento.")
+            st.caption("No pharmacological alerts at the moment.")
     with tabs[4]:
         if st.session_state.critical_events:
             st.markdown(
@@ -1693,48 +1693,48 @@ def render_patient_dashboard() -> None:
                 unsafe_allow_html=True,
             )
             st.markdown(
-                "[Ligar 192 (SAMU)](tel:192) | [Ligar 190 (Policia)](tel:190)",
+                "[Call 192 (SAMU)](tel:192) | [Call 190 (Police)](tel:190)",
                 unsafe_allow_html=True,
             )
         else:
-            st.caption("Nenhum evento critico detectado.")
+            st.caption("No critical events detected.")
     with tabs[5]:
         render_advanced_insights()
 
 
 def render_wearable_insights() -> None:
     if not st.session_state.wearable_payload:
-        st.caption("Sem dados recentes de wearables.")
+        st.caption("No recent wearable data.")
         return
     payload = st.session_state.wearable_payload
-    st.markdown(f"#### {ICON_WEARABLE} Insights de wearables", unsafe_allow_html=True)
+    st.markdown(f"#### {ICON_WEARABLE} Wearable insights", unsafe_allow_html=True)
     for key, value in payload.items():
         if isinstance(value, list) and value and all(isinstance(v, (int, float)) for v in value):
             st.line_chart(value, height=120)
-            st.caption(f"{key.title()} com {len(value)} pontos coletados.")
+            st.caption(f"{key.title()} with {len(value)} points collected.")
         else:
             st.text(f"{key}: {value}")
 
 
 
 def render_explainability_panel() -> None:
-    st.markdown("#### Detalhes do raciocinio", unsafe_allow_html=True)
+    st.markdown("#### Reasoning details", unsafe_allow_html=True)
     bullets: List[str] = []
     if st.session_state.exam_findings:
-        bullets.append(f"{ICON_EXAM} Exames interpretados: {len(st.session_state.exam_findings)}")
+        bullets.append(f"{ICON_EXAM} Interpreted exams: {len(st.session_state.exam_findings)}")
     if st.session_state.imaging_findings:
-        bullets.append(f"{ICON_IMAGING} Imagens analisadas: {len(st.session_state.imaging_findings)}")
+        bullets.append(f"{ICON_IMAGING} Analyzed images: {len(st.session_state.imaging_findings)}")
     if st.session_state.symptom_log:
         tokens = get_unique_symptoms(limit=4)
         if tokens:
-            bullets.append(f"{ICON_STEP} Sintomas chave: {', '.join(tokens)}")
+            bullets.append(f"{ICON_STEP} Key symptoms: {', '.join(tokens)}")
     if bullets:
         for bullet in bullets:
             st.markdown(f"- {bullet}")
     else:
-        st.caption("Ainda coletando informacoes para explicabilidade.")
+        st.caption("Still gathering information for explainability.")
     if st.session_state.explainability_notes:
-        st.markdown("Notas de imagem recentes:")
+        st.markdown("Recent image notes:")
         for note in st.session_state.explainability_notes[-3:]:
             st.markdown(f"- {note}")
 
@@ -1742,7 +1742,7 @@ def render_explainability_panel() -> None:
 def render_education_cards() -> None:
 
     if not st.session_state.education_recommendations:
-        st.caption("Recomende exames ou descreva sintomas para ativar materiais educativos.")
+        st.caption("Recommend exams or describe symptoms to activate educational materials.")
         return
     checklist = st.session_state.education_checklist
     for idx, rec in enumerate(st.session_state.education_recommendations):
@@ -1754,13 +1754,13 @@ def render_education_cards() -> None:
                 f"""
                 <div class="education-card">
                     <strong>{rec['title']}</strong> <span class='badge-accent'>{rec['type']}</span><br/>
-                    <a href="{rec['url']}" target="_blank">Abrir material</a>
+                    <a href="{rec['url']}" target="_blank">Open material</a>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
         with col2:
-            checklist[key] = st.checkbox("Lido", value=checked, key=f"edu_{idx}")
+            checklist[key] = st.checkbox("Read", value=checked, key=f"edu_{idx}")
     st.session_state.education_checklist = checklist
 
 
@@ -1825,7 +1825,7 @@ def refresh_multiexam_reasoning() -> None:
 
 
 def render_advanced_insights() -> None:
-    st.markdown("#### Insights laboratoriais avancados", unsafe_allow_html=True)
+    st.markdown("#### Advanced laboratory insights", unsafe_allow_html=True)
     labs = st.session_state.get("advanced_lab_findings", [])
     if labs:
         for entry in labs[-3:]:
@@ -1841,50 +1841,50 @@ def render_advanced_insights() -> None:
             if trend:
                 st.caption(trend)
     else:
-        st.caption("Sem flags laboratoriais avancados no momento.")
+        st.caption("No advanced laboratory flags at the moment.")
 
-    st.markdown("#### CAD e metadados de DICOM", unsafe_allow_html=True)
+    st.markdown("#### CAD and DICOM metadata", unsafe_allow_html=True)
     dicom_items = st.session_state.get("dicom_findings", [])
     if dicom_items:
         for record in dicom_items[-3:]:
             meta = "; ".join(record.get("meta_summary", []) or [])
             cad_flags = "; ".join(record.get("cad_flags", []) or [])
-            st.markdown(f"- {record.get('id')}: {meta or 'Sem metadados'}")
+            st.markdown(f"- {record.get('id')}: {meta or 'No metadata'}")
             if cad_flags:
                 st.caption(cad_flags)
     else:
-        st.caption("Nenhum estudo DICOM detalhado registrado.")
+        st.caption("No detailed DICOM study recorded.")
 
-    st.markdown("#### Correlacao multiexames", unsafe_allow_html=True)
+    st.markdown("#### Multi-exam correlation", unsafe_allow_html=True)
     cross_notes = st.session_state.get("cross_validation_notes", [])
     cross_conflicts = st.session_state.get("cross_conflicts", [])
     if cross_notes:
         for note in cross_notes[-5:]:
             st.markdown(f"- {note}")
     else:
-        st.caption("Sem notas combinadas ate o momento.")
+        st.caption("No combined notes so far.")
     if cross_conflicts:
-        st.warning("Conflitos detectados: " + " | ".join(cross_conflicts))
+        st.warning("Conflicts detected: " + " | ".join(cross_conflicts))
 
-    st.markdown("#### ECG / sinais vitais", unsafe_allow_html=True)
+    st.markdown("#### ECG / vital signs", unsafe_allow_html=True)
     ecg_insights = st.session_state.get("ecg_insights", [])
     if ecg_insights:
         for insight in ecg_insights[-3:]:
-            st.markdown(f"- {insight.get('summary', 'Sem resumo')}")
+            st.markdown(f"- {insight.get('summary', 'No summary')}")
     else:
-        st.caption("Nenhuma analise de ECG processada.")
+        st.caption("No ECG analysis processed.")
 
-    st.markdown("#### Diretrizes clinicas sugeridas", unsafe_allow_html=True)
+    st.markdown("#### Suggested clinical guidelines", unsafe_allow_html=True)
     plan = st.session_state.get("guideline_plan", [])
     if plan:
         for step in plan:
             st.markdown(f"- {step}")
     else:
-        st.caption("Sem alertas de diretrizes no momento.")
+        st.caption("No guideline alerts at the moment.")
     cha2ds2 = st.session_state.get("guideline_cha2ds2")
     if isinstance(cha2ds2, dict):
         st.caption(
-            f"CHA2DS2-VASc: {cha2ds2.get('score')} pontos ({', '.join(cha2ds2.get('factors', []))}) - "
+            f"CHA2DS2-VASc: {cha2ds2.get('score')} points ({', '.join(cha2ds2.get('factors', []))}) - "
             f"{cha2ds2.get('recommendation')}"
         )
     curb65 = st.session_state.get("guideline_curb65")
@@ -1895,7 +1895,7 @@ def render_advanced_insights() -> None:
 def render_patient_profile() -> None:
     demographics = st.session_state.get("demographics")
     if not isinstance(demographics, dict) or not any(demographics.values()):
-        st.caption("Perfil demografico ainda nao informado.")
+        st.caption("Demographic profile not informed yet.")
         return
 
     age = demographics.get("age")
@@ -1907,46 +1907,46 @@ def render_patient_profile() -> None:
     smoking_status = demographics.get("smoking_status")
 
     if age:
-        st.markdown(f"- Idade: **{age}** anos")
+        st.markdown(f"- Age: **{age}** years")
     if sex:
-        st.markdown(f"- Sexo: **{sex}**")
+        st.markdown(f"- Sex: **{sex}**")
     if weight:
-        st.markdown(f"- Peso: **{weight:.1f} kg**")
+        st.markdown(f"- Weight: **{weight:.1f} kg**")
     if height:
-        st.markdown(f"- Altura: **{height:.1f} cm**")
+        st.markdown(f"- Height: **{height:.1f} cm**")
     if bmi:
-        st.markdown(f"- IMC calculado: **{bmi:.1f}**")
+        st.markdown(f"- Calculated BMI: **{bmi:.1f}**")
     if pregnancy_status:
-        st.markdown(f"- Gestacao: **{pregnancy_status}**")
+        st.markdown(f"- Pregnancy: **{pregnancy_status}**")
     if smoking_status:
-        st.markdown(f"- Tabagismo: **{smoking_status}**")
+        st.markdown(f"- Smoking: **{smoking_status}**")
 
     blood_pressure = demographics.get("blood_pressure")
     if isinstance(blood_pressure, dict):
         sys_bp = blood_pressure.get("systolic")
         dia_bp = blood_pressure.get("diastolic")
         if sys_bp and dia_bp:
-            st.markdown(f"- Pressao arterial: **{sys_bp}/{dia_bp} mmHg**")
+            st.markdown(f"- Blood pressure: **{sys_bp}/{dia_bp} mmHg**")
 
     history = demographics.get("history")
     if isinstance(history, dict) and any(history.values()):
-        st.markdown("##### Condicoes clinicas registradas")
+        st.markdown("##### Recorded clinical conditions")
         for key, value in history.items():
             if value:
                 st.markdown(f"- {key.replace('_', ' ').title()}")
 
     notes = demographics.get("notes")
     if notes:
-        st.markdown("##### Observacoes adicionais")
+        st.markdown("##### Additional notes")
         st.write(notes)
 def prepare_context_for_model(
     user_input: str,
     medication_alerts: Optional[List[str]] = None,
 ) -> Tuple[str, Dict[str, Any]]:
-    """Compila o contexto clínico usado no prompt do modelo conversacional."""
+    """Compiles the clinical context used in the conversational model prompt."""
     med_alerts = medication_alerts or st.session_state.get("medication_alerts", [])
     pieces: List[str] = [
-        "Mensagem recente do paciente:\n" + user_input.strip(),
+        "Recent patient message:\n" + user_input.strip(),
     ]
     exam_context = st.session_state.exam_pipeline.render_for_prompt(st.session_state.exam_findings)
     imaging_context = st.session_state.radiography_service.render_for_prompt(
@@ -1955,61 +1955,61 @@ def prepare_context_for_model(
     wearable_payload = st.session_state.wearable_payload or {}
     wearable_context = ""
     if wearable_payload:
-        wearable_context = "Dados de wearables: " + json.dumps(wearable_payload)[:800]
+        wearable_context = "Wearable data: " + json.dumps(wearable_payload)[:800]
     demographics = st.session_state.get("demographics", {})
     if exam_context:
-        pieces.append("Resumo de exames estruturados:\n" + exam_context)
+        pieces.append("Structured exam summary:\n" + exam_context)
         analyses = []
         for item in st.session_state.exam_findings:
             analyses.extend(analyze_exam_item(item))
         if analyses:
-            pieces.append("Analise automatica de exames:\n" + "\n".join(f"- {msg}" for msg in analyses))
+            pieces.append("Automatic exam analysis:\n" + "\n".join(f"- {msg}" for msg in analyses))
     if imaging_context:
-        pieces.append("Resumo de radiografias:\n" + imaging_context)
+        pieces.append("Radiograph summary:\n" + imaging_context)
     if wearable_context:
         pieces.append(wearable_context)
     if med_alerts:
-        pieces.append("Alertas farmacologicos ativos: " + "; ".join(sorted(set(med_alerts))))
+        pieces.append("Active pharmacological alerts: " + "; ".join(sorted(set(med_alerts))))
     if isinstance(demographics, dict) and any(
         value for value in demographics.values() if value not in (None, "", [], {})
     ):
         demo_lines: List[str] = []
         age = demographics.get("age")
         if age not in (None, "", 0):
-            demo_lines.append(f"Idade: {age} anos")
+            demo_lines.append(f"Age: {age} years")
         sex = demographics.get("sex")
         if sex:
-            demo_lines.append(f"Sexo: {sex}")
+            demo_lines.append(f"Sex: {sex}")
         weight = demographics.get("weight_kg")
         if weight not in (None, "", 0):
             try:
-                demo_lines.append(f"Peso: {float(weight):.1f} kg")
+                demo_lines.append(f"Weight: {float(weight):.1f} kg")
             except (TypeError, ValueError):
-                demo_lines.append(f"Peso: {weight} kg")
+                demo_lines.append(f"Weight: {weight} kg")
         height = demographics.get("height_cm")
         if height not in (None, "", 0):
             try:
-                demo_lines.append(f"Altura: {float(height):.1f} cm")
+                demo_lines.append(f"Height: {float(height):.1f} cm")
             except (TypeError, ValueError):
-                demo_lines.append(f"Altura: {height} cm")
+                demo_lines.append(f"Height: {height} cm")
         bmi = demographics.get("bmi")
         if bmi not in (None, "", 0):
             try:
-                demo_lines.append(f"IMC: {float(bmi):.1f}")
+                demo_lines.append(f"BMI: {float(bmi):.1f}")
             except (TypeError, ValueError):
-                demo_lines.append(f"IMC: {bmi}")
+                demo_lines.append(f"BMI: {bmi}")
         pregnancy_status = demographics.get("pregnancy_status")
         if pregnancy_status:
-            demo_lines.append(f"Gestacao: {pregnancy_status}")
+            demo_lines.append(f"Pregnancy: {pregnancy_status}")
         smoking_status = demographics.get("smoking_status")
         if smoking_status:
-            demo_lines.append(f"Tabagismo: {smoking_status}")
+            demo_lines.append(f"Smoking: {smoking_status}")
         blood_pressure = demographics.get("blood_pressure")
         if isinstance(blood_pressure, dict):
             systolic = blood_pressure.get("systolic")
             diastolic = blood_pressure.get("diastolic")
             if systolic and diastolic:
-                demo_lines.append(f"Pressao arterial: {systolic}/{diastolic} mmHg")
+                demo_lines.append(f"Blood pressure: {systolic}/{diastolic} mmHg")
         history = demographics.get("history")
         if isinstance(history, dict):
             conditions = [
@@ -2018,12 +2018,12 @@ def prepare_context_for_model(
                 if value
             ]
             if conditions:
-                demo_lines.append("Historico: " + ", ".join(conditions))
+                demo_lines.append("History: " + ", ".join(conditions))
         notes = demographics.get("notes")
         if notes:
-            demo_lines.append("Observacoes: " + str(notes))
+            demo_lines.append("Notes: " + str(notes))
         if demo_lines:
-            pieces.append("Perfil do paciente:\n" + "\n".join(f"- {line}" for line in demo_lines))
+            pieces.append("Patient profile:\n" + "\n".join(f"- {line}" for line in demo_lines))
     advanced_labs = st.session_state.get("advanced_lab_findings", [])
     if advanced_labs:
         lab_lines = []
@@ -2041,7 +2041,7 @@ def prepare_context_for_model(
                 summary += " | " + "; ".join(entry.get("trend_summary", []))
             lab_lines.append(summary)
         if lab_lines:
-            pieces.append("Lab avancado:\n" + "\n".join(lab_lines))
+            pieces.append("Advanced lab:\n" + "\n".join(lab_lines))
     dicom_findings = st.session_state.get("dicom_findings", [])
     if dicom_findings:
         dicom_lines = []
@@ -2050,34 +2050,34 @@ def prepare_context_for_model(
             cad = "; ".join(record.get("cad_flags", []) or [])
             dicom_lines.append(f"{record.get('id')}: {meta} {cad}")
         if dicom_lines:
-            pieces.append("Resumo DICOM detalhado:\n" + "\n".join(dicom_lines))
+            pieces.append("Detailed DICOM summary:\n" + "\n".join(dicom_lines))
     cross_notes = st.session_state.get("cross_validation_notes", [])
     if cross_notes:
-        pieces.append("Notas combinadas multiexames:\n" + "\n".join(f"- {note}" for note in cross_notes[-5:]))
+        pieces.append("Combined multi-exam notes:\n" + "\n".join(f"- {note}" for note in cross_notes[-5:]))
     if st.session_state.get("cross_conflicts"):
-        pieces.append("Conflitos detectados: " + "; ".join(st.session_state.cross_conflicts))
+        pieces.append("Conflicts detected: " + "; ".join(st.session_state.cross_conflicts))
     ecg_insights = st.session_state.get("ecg_insights", [])
     if ecg_insights:
         pieces.append(
-            "Resumo ECG:\n" + "\n".join(f"- {item.get('summary', '')}" for item in ecg_insights[-3:])
+            "ECG summary:\n" + "\n".join(f"- {item.get('summary', '')}" for item in ecg_insights[-3:])
         )
     guideline_plan = st.session_state.get("guideline_plan", [])
     if guideline_plan:
-        pieces.append("Plano sugerido por diretrizes:\n" + "\n".join(f"- {step}" for step in guideline_plan))
-    triage_state = "ativo" if st.session_state.get("triage_mode", False) else "inativo"
-    pieces.append(f"Status da triagem: {triage_state}")
+        pieces.append("Plan suggested by guidelines:\n" + "\n".join(f"- {step}" for step in guideline_plan))
+    triage_state = "active" if st.session_state.get("triage_mode", False) else "inactive"
+    pieces.append(f"Triage status: {triage_state}")
     symptom_report = build_symptom_report()
-    if "Sem sintomas" not in symptom_report:
+    if "No symptoms" not in symptom_report:
         pieces.append(symptom_report)
     plan_state = st.session_state.planner_state or {}
     if plan_state.get("plan_prompt"):
-        pieces.append("Plano conversacional:\n" + plan_state["plan_prompt"])
+        pieces.append("Conversational plan:\n" + plan_state["plan_prompt"])
     fusion_data = st.session_state.multimodal_signature or {}
     if fusion_data.get("summary"):
         pieces.append(
-            "Assinatura multimodal: "
+            "Multimodal signature: "
             + fusion_data["summary"]
-            + f" Vetor={fusion_data.get('vector')}"
+            + f" Vector={fusion_data.get('vector')}"
         )
     hackathon_report = st.session_state.get("hackathon_triage_report")
     hackathon_dict: Optional[Dict[str, Any]] = None
@@ -2093,9 +2093,9 @@ def prepare_context_for_model(
             hackathon_dict = hackathon_report
             summary = ""
         if summary:
-            pieces.append("Triagem de enfermagem (Hackathon):\n" + summary)
+            pieces.append("Nursing triage (Hackathon):\n" + summary)
         elif hackathon_dict:
-            pieces.append("Triagem de enfermagem (Hackathon) disponivel para consulta.")
+            pieces.append("Nursing triage (Hackathon) available for reference.")
     context_payload = truncate_text("\n\n".join(pieces), limit=4000)
     context_meta = {
         "critical_flags": st.session_state.critical_events,
@@ -2129,7 +2129,7 @@ def generate_tts_audio(text: str, language: str = "pt") -> Optional[bytes]:
 
 
 class GeminiVoiceAgent:
-    """Wrapper simples para acionar o Gemini AI Studio com audio."""
+    """Simple wrapper to call Gemini AI Studio with audio."""
 
     def __init__(
         self,
@@ -2153,7 +2153,7 @@ class GeminiVoiceAgent:
     def _ensure_backend(self) -> None:
         if not self.available():
             raise RuntimeError(
-                "Gemini Voice Agent indisponivel (biblioteca ou chave ausente)."
+                "Gemini Voice Agent unavailable (library or key missing)."
             )
         if self._client or self._legacy_model:
             return
@@ -2166,7 +2166,7 @@ class GeminiVoiceAgent:
                 system_instruction=VOICE_AGENT_INSTRUCTIONS,
             )
         else:  # pragma: no cover
-            raise RuntimeError("SDK Gemini nao instalado.")
+            raise RuntimeError("Gemini SDK not installed.")
 
     def transcribe_and_respond(
         self,
@@ -2180,7 +2180,7 @@ class GeminiVoiceAgent:
             if self._client is not None and google_genai_types is not None:
                 prompt = (
                     f"{VOICE_AGENT_INSTRUCTIONS}\n\n{VOICE_AGENT_RESPONSE_SCHEMA}\n"
-                    "Quando nao houver fala, informe explicitamente em portugues."
+                    "When there is no speech, state it explicitly."
                 )
                 audio_part = google_genai_types.Part.from_bytes(
                     data=audio,
@@ -2218,7 +2218,7 @@ class GeminiVoiceAgent:
                 )
                 raw_text = getattr(response, "text", "") or ""
             else:  # pragma: no cover
-                raise RuntimeError("Nenhum backend Gemini configurado.")
+                raise RuntimeError("No Gemini backend configured.")
         except Exception as exc:
             self.last_error = str(exc)
             raise
@@ -2252,10 +2252,10 @@ def get_voice_agent() -> Optional[GeminiVoiceAgent]:
 
 def render_sidebar() -> None:
     with st.sidebar:
-        st.header("Fluxos auxiliares")
+        st.header("Auxiliary flows")
 
         theme_choice = st.radio(
-            "Tema visual",
+            "Visual theme",
             options=list(THEME_STYLES.keys()),
             index=list(THEME_STYLES.keys()).index(st.session_state.theme)
             if st.session_state.theme in THEME_STYLES
@@ -2264,7 +2264,7 @@ def render_sidebar() -> None:
         )
         st.session_state.theme = theme_choice
         font_scale = st.slider(
-            "Tamanho da fonte",
+            "Font size",
             min_value=0.9,
             max_value=1.4,
             value=float(st.session_state.font_scale),
@@ -2272,7 +2272,7 @@ def render_sidebar() -> None:
         )
         st.session_state.font_scale = font_scale
         memory_window = st.slider(
-            "Memoria da IA (trocas consideradas)",
+            "AI memory (exchanges considered)",
             min_value=10,
             max_value=120,
             value=int(st.session_state.memory_window),
@@ -2283,7 +2283,7 @@ def render_sidebar() -> None:
             adjust_memory_window(memory_window)
 
         st.markdown("---")
-        st.caption("Painel lateral reservado para ajustes/debug. Use o painel da direita para dados do paciente.")
+        st.caption("Side panel reserved for settings/debug. Use the right-hand panel for patient data.")
 
 
 def render_patient_panel() -> None:
@@ -2297,23 +2297,23 @@ def render_patient_panel() -> None:
 
     action_col1, action_col2 = st.columns(2)
     with action_col1:
-        if st.button("Carregar exemplo oficial", key="load_patient_example"):
+        if st.button("Load official example", key="load_patient_example"):
             st.session_state.hackathon_triage_payload = example_triage_payload()
             st.session_state.hackathon_triage_report = None
             st.rerun()
     with action_col2:
-        if st.button("Limpar dados do paciente", key="clear_patient_form"):
+        if st.button("Clear patient data", key="clear_patient_form"):
             st.session_state.demographics = {}
             st.session_state.hackathon_triage_payload = {}
             st.session_state.hackathon_triage_report = None
             st.rerun()
 
     history_catalog = {
-        "Insuficiencia cardiaca": "congestive_heart_failure",
-        "Hipertensao": "hypertension",
-        "AVE/AIT previo": "stroke_tia",
+        "Heart failure": "congestive_heart_failure",
+        "Hypertension": "hypertension",
+        "Prior stroke/TIA": "stroke_tia",
         "Diabetes": "diabetes",
-        "Doenca vascular": "vascular_disease",
+        "Vascular disease": "vascular_disease",
     }
     history_default = [
         label for label, key in history_catalog.items() if current_history.get(key)
@@ -2330,61 +2330,61 @@ def render_patient_panel() -> None:
 
     with st.form("patient_profile_form"):
         patient_name_input = st.text_input(
-            "Nome completo do paciente",
+            "Patient full name",
             value=demographics.get("patient_name", ""),
         )
         patient_email_input = st.text_input(
-            "Email do paciente",
+            "Patient email",
             value=demographics.get("patient_email", ""),
         )
         patient_phone_input = st.text_input(
-            "Telefone / Contato",
+            "Phone / Contact",
             value=demographics.get("patient_phone", ""),
         )
         patient_address_input = st.text_input(
-            "Endereco (opcional)",
+            "Address (optional)",
             value=demographics.get("patient_address", ""),
         )
         col_demo, col_biometrics = st.columns(2)
         age_default = demographics.get("age")
         age_input = col_demo.number_input(
-            "Idade (anos)",
+            "Age (years)",
             min_value=0,
             max_value=120,
             value=int(age_default) if isinstance(age_default, (int, float)) and age_default > 0 else 0,
             step=1,
         )
-        sex_options = ["Selecione", "Feminino", "Masculino", "Outro"]
-        current_sex = demographics.get("sex") or triage_seed.get("sex", "Selecione")
+        sex_options = ["Select", "Female", "Male", "Other"]
+        current_sex = demographics.get("sex") or triage_seed.get("sex", "Select")
         if current_sex in {"F", "M"}:
-            current_sex = "Feminino" if current_sex == "F" else "Masculino"
+            current_sex = "Female" if current_sex == "F" else "Male"
         sex_index = sex_options.index(current_sex) if current_sex in sex_options else 0
-        sex_input = col_demo.selectbox("Sexo", options=sex_options, index=sex_index)
-        blood_options = ["Nao informado", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
-        blood_default = triage_seed.get("blood_type") or demographics.get("blood_type") or "Nao informado"
+        sex_input = col_demo.selectbox("Sex", options=sex_options, index=sex_index)
+        blood_options = ["Not informed", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
+        blood_default = triage_seed.get("blood_type") or demographics.get("blood_type") or "Not informed"
         if blood_default not in blood_options:
-            blood_default = "Nao informado"
+            blood_default = "Not informed"
         blood_type = col_demo.selectbox(
-            "Tipo sanguineo",
+            "Blood type",
             options=blood_options,
             index=blood_options.index(blood_default),
         )
-        smoking_options = ["Nao fumante", "Ex-fumante", "Fumante atual"]
+        smoking_options = ["Non-smoker", "Former smoker", "Current smoker"]
         current_smoke = demographics.get("smoking_status")
         smoke_index = smoking_options.index(current_smoke) if current_smoke in smoking_options else 0
-        smoking_status = col_demo.selectbox("Tabagismo", options=smoking_options, index=smoke_index)
+        smoking_status = col_demo.selectbox("Smoking", options=smoking_options, index=smoke_index)
         pregnancy_status = demographics.get("pregnancy_status")
-        if sex_input == "Feminino":
-            pregnancy_options = ["Nao", "Primeiro trimestre", "Segundo trimestre", "Terceiro trimestre"]
+        if sex_input == "Female":
+            pregnancy_options = ["No", "First trimester", "Second trimester", "Third trimester"]
             preg_index = pregnancy_options.index(pregnancy_status) if pregnancy_status in pregnancy_options else 0
-            pregnancy_status = col_demo.selectbox("Gestacao atual", options=pregnancy_options, index=preg_index)
+            pregnancy_status = col_demo.selectbox("Current pregnancy", options=pregnancy_options, index=preg_index)
         else:
             pregnancy_status = None
 
         weight_default = demographics.get("weight_kg") or 0.0
         height_default = demographics.get("height_cm") or 0.0
         weight_input = col_biometrics.number_input(
-            "Peso (kg)",
+            "Weight (kg)",
             min_value=0.0,
             max_value=400.0,
             value=float(weight_default),
@@ -2392,7 +2392,7 @@ def render_patient_panel() -> None:
             format="%.1f",
         )
         height_input = col_biometrics.number_input(
-            "Altura (cm)",
+            "Height (cm)",
             min_value=0.0,
             max_value=250.0,
             value=float(height_default),
@@ -2402,94 +2402,94 @@ def render_patient_panel() -> None:
         bmi_value: Optional[float] = None
         if weight_input > 0 and height_input > 0:
             bmi_value = weight_input / ((height_input / 100) ** 2)
-            col_biometrics.caption(f"IMC calculado: {bmi_value:.1f}")
+            col_biometrics.caption(f"Calculated BMI: {bmi_value:.1f}")
 
         st.divider()
-        st.caption("Sinais vitais para triagem automática")
+        st.caption("Vital signs for automatic triage")
         col_bp, col_vitals = st.columns(2)
         blood_pressure = demographics.get("blood_pressure")
         if not isinstance(blood_pressure, dict):
             blood_pressure = {}
         systolic_input = col_bp.number_input(
-            "Pressao sistolica",
+            "Systolic pressure",
             min_value=0,
             max_value=250,
             value=int(blood_pressure.get("systolic") or triage_seed.get("systolic") or 0),
             step=1,
         )
         diastolic_input = col_bp.number_input(
-            "Pressao diastolica",
+            "Diastolic pressure",
             min_value=0,
             max_value=160,
             value=int(blood_pressure.get("diastolic") or triage_seed.get("diastolic") or 0),
             step=1,
         )
         heart_rate_input = col_vitals.number_input(
-            "Frequencia cardiaca (bpm)",
+            "Heart rate (bpm)",
             min_value=0,
             max_value=250,
             value=int(triage_seed.get("heart_rate") or 0),
             step=1,
         )
         temperature_input = col_vitals.number_input(
-            "Temperatura (°C)",
+            "Temperature (C)",
             min_value=0.0,
             max_value=45.0,
             value=float(triage_seed.get("temperature") or 0.0),
             step=0.1,
         )
         spo2_input = col_vitals.number_input(
-            "Saturacao de O₂ (%)",
+            "O2 saturation (%)",
             min_value=0,
             max_value=100,
             value=int(triage_seed.get("spo2") or 0),
             step=1,
         )
 
-        st.caption("Condicoes clinicas e antecedentes")
+        st.caption("Clinical conditions and history")
         history_options = list(history_catalog.keys())
         chronic_selection = st.multiselect(
-            "Selecione condicoes",
+            "Select conditions",
             options=history_options + [item for item in COMMON_CHRONIC_CONDITIONS if item not in history_options],
             default=list(dict.fromkeys(history_default + [item for item in triage_seed.get("chronic_conditions", []) if item in history_options])),
         )
         chronic_extra_input = st.text_input(
-            "Outras condicoes cronicas",
+            "Other chronic conditions",
             value=", ".join([item for item in extra_chronic_defaults if item not in chronic_selection]),
         )
         allergies_selected = st.multiselect(
-            "Alergias conhecidas",
+            "Known allergies",
             options=COMMON_ALLERGIES,
             default=[item for item in allergy_defaults if item in COMMON_ALLERGIES],
         )
         allergy_extra = st.text_input(
-            "Outras alergias",
+            "Other allergies",
             value=", ".join([item for item in allergy_defaults if item not in COMMON_ALLERGIES]),
         )
         medications_selected = st.multiselect(
-            "Medicacoes de uso continuo",
+            "Continuous-use medications",
             options=COMMON_MEDICATIONS,
             default=[item for item in medication_defaults if item in COMMON_MEDICATIONS],
         )
         meds_extra = st.text_input(
-            "Outras medicacoes",
+            "Other medications",
             value=", ".join([item for item in medication_defaults if item not in COMMON_MEDICATIONS]),
         )
         symptoms_text = st.text_area(
-            "Sintomas relatados",
+            "Reported symptoms",
             value="\n".join(triage_seed.get("symptoms", [])),
-            placeholder="Ex.: dor no peito, febre persistente, falta de ar...",
+            placeholder="E.g.: chest pain, persistent fever, shortness of breath...",
         )
 
-        st.caption("Observacoes adicionais")
+        st.caption("Additional notes")
         notes_input = st.text_area(
-            "Outras informacoes clinicas",
+            "Other clinical information",
             value=str(demographics.get("notes") or ""),
             height=80,
         )
 
         submitted = st.form_submit_button(
-            "Salvar dados e gerar relatório automático",
+            "Save data and generate automatic report",
             use_container_width=True,
         )
 
@@ -2520,11 +2520,11 @@ def render_patient_panel() -> None:
         processed_demo["history"] = updated_history
         processed_demo["notes"] = notes_input.strip() or None
         processed_demo["age"] = int(age_input) if age_input > 0 else None
-        processed_demo["sex"] = {"Feminino": "F", "Masculino": "M"}.get(sex_input, None)
+        processed_demo["sex"] = {"Female": "F", "Male": "M"}.get(sex_input, None)
         processed_demo["weight_kg"] = round(weight_input, 1) if weight_input > 0 else None
         processed_demo["height_cm"] = round(height_input, 1) if height_input > 0 else None
         processed_demo["smoking_status"] = smoking_status
-        if pregnancy_status and pregnancy_status != "Nao":
+        if pregnancy_status and pregnancy_status != "No":
             processed_demo["pregnancy_status"] = pregnancy_status
         else:
             processed_demo.pop("pregnancy_status", None)
@@ -2539,7 +2539,7 @@ def render_patient_panel() -> None:
             }
         else:
             processed_demo.pop("blood_pressure", None)
-        processed_demo["blood_type"] = None if blood_type == "Nao informado" else blood_type
+        processed_demo["blood_type"] = None if blood_type == "Not informed" else blood_type
         processed_demo["patient_name"] = patient_name_input.strip() or None
         processed_demo["patient_email"] = patient_email_input.strip() or None
         processed_demo["patient_phone"] = patient_phone_input.strip() or None
@@ -2571,34 +2571,34 @@ def render_patient_panel() -> None:
                 sex=sex_input,
                 chronic_conditions=full_chronic_list,
                 allergies=allergies_list,
-                blood_type=None if blood_type == "Nao informado" else blood_type,
+                blood_type=None if blood_type == "Not informed" else blood_type,
                 medications=medication_list,
                 symptoms=symptoms_list,
             )
             report = generate_triage_report(payload)
             st.session_state.hackathon_triage_report = report
             st.session_state.hackathon_triage_payload = payload.to_dict()
-            st.success("Triagem automatizada atualizada com sucesso.")
+            st.success("Automated triage updated successfully.")
             store_triage_in_supabase(
                 demographics=processed_demo,
                 triage_payload=payload,
                 report=report,
             )
         else:
-            st.warning("Módulo do Hackathon não está disponível neste ambiente.")
+            st.warning("The Hackathon module is not available in this environment.")
 
     if st.session_state.symptom_log:
-        with st.expander("Resumo rapido de sintomas", expanded=False):
-            st.caption("Sintomas mais recentes registrados automaticamente.")
+        with st.expander("Quick symptom summary", expanded=False):
+            st.caption("Most recent symptoms recorded automatically.")
             st.write(summarize_symptom_log(st.session_state.symptom_log))
-            if st.button("Limpar sintomas", key="clear_symptoms_panel"):
+            if st.button("Clear symptoms", key="clear_symptoms_panel"):
                 st.session_state.symptom_log = []
-                st.success("Sintomas resetados para esta sessao.")
+                st.success("Symptoms reset for this session.")
 
     st.markdown("---")
-    st.subheader("Arquivos clinicos")
+    st.subheader("Clinical files")
     exam_files = st.file_uploader(
-        "Envie exames estruturados (PDF, CSV, HL7, imagem)",
+        "Upload structured exams (PDF, CSV, HL7, image)",
         type=["pdf", "csv", "hl7", "json", "txt", "png", "jpg", "jpeg"],
         accept_multiple_files=True,
     )
@@ -2632,7 +2632,7 @@ def render_patient_panel() -> None:
                         st.session_state.ecg_ids.add(result["id"])
 
     if st.session_state.exam_findings:
-        with st.expander("Exames processados", expanded=False):
+        with st.expander("Processed exams", expanded=False):
             for item in st.session_state.exam_findings:
                 st.markdown(f"**{item['name']}**")
                 if item["normalized"]:
@@ -2643,7 +2643,7 @@ def render_patient_panel() -> None:
                     st.caption("; ".join(item["notes"]))
 
     imaging_files = st.file_uploader(
-        "Radiografias (JPG, PNG, DICOM zip)",
+        "Radiographs (JPG, PNG, DICOM zip)",
         type=["png", "jpg", "jpeg", "zip", "dcm"],
         accept_multiple_files=True,
         key="imaging_upload_panel",
@@ -2670,7 +2670,7 @@ def render_patient_panel() -> None:
     refresh_multiexam_reasoning()
 
     if st.session_state.imaging_findings:
-        with st.expander("Achados de radiografia", expanded=False):
+        with st.expander("Radiograph findings", expanded=False):
             for item in st.session_state.imaging_findings:
                 st.markdown(f"**{item['name']}**")
                 st.json(item["payload"])
@@ -2678,7 +2678,7 @@ def render_patient_panel() -> None:
                     st.caption("; ".join(item["notes"]))
 
     if st.session_state.explainability_notes:
-        with st.expander("Explicabilidade visual", expanded=False):
+        with st.expander("Visual explainability", expanded=False):
             for note in st.session_state.explainability_notes[-5:]:
                 st.write("- " + note)
 
@@ -2687,73 +2687,73 @@ def render_patient_panel() -> None:
         st.caption(f"Supabase: {supabase_msg}")
 
     st.markdown("---")
-    st.subheader("Educacao personalizada")
+    st.subheader("Personalized education")
     render_education_cards()
     selected_category = st.selectbox(
-        "Explorar categoria manualmente",
-        options=["Selecione"] + st.session_state.education_manager.list_categories(),
+        "Explore category manually",
+        options=["Select"] + st.session_state.education_manager.list_categories(),
         index=0,
     )
-    if selected_category != "Selecione":
+    if selected_category != "Select":
         for rec in EDUCATION_LIBRARY[selected_category]:
             st.markdown(f"* `{selected_category}` -> **{rec['title']}** ({rec['type']})")
 
         st.markdown("---")
-        st.subheader("Ficha para imprimir")
+        st.subheader("Printable sheet")
         summary_text = st.session_state.printable_summary or build_symptom_report()
-        if summary_text and "Sem sintomas registrados" not in summary_text:
+        if summary_text and "No symptoms recorded" not in summary_text:
             st.text_area(
-                "Resumo de sintomas",
+                "Symptom summary",
                 value=summary_text,
                 height=140,
                 disabled=True,
             )
             qr_bytes = generate_qr_code(summary_text)
             if qr_bytes:
-                safe_show_image(qr_bytes, caption="Compartilhe via QR Code", use_column_width=False)
+                safe_show_image(qr_bytes, caption="Share via QR Code", use_column_width=False)
             st.download_button(
-                "Baixar sintomas (.txt)",
+                "Download symptoms (.txt)",
                 summary_text.encode("utf-8"),
-                file_name="medIA_sintomas.txt",
+                file_name="medIA_symptoms.txt",
                 mime="text/plain",
             )
         else:
-            st.caption("Nenhum sintoma suficiente para gerar resumo imprimivel.")
+            st.caption("Not enough symptoms to generate a printable summary.")
         st.markdown("---")
-        st.subheader("Monitoramento epidemiologico")
+        st.subheader("Epidemiological monitoring")
         if st.session_state.epidemiology_snapshot:
             st.json(st.session_state.epidemiology_snapshot)
         else:
-            st.caption("Ainda sem dados agregados suficientes.")
+            st.caption("Not enough aggregated data yet.")
 
         st.markdown("---")
         if st.session_state.active_learning_queue:
-            with st.expander("Fila de aprendizado ativo", expanded=False):
-                if st.button("Limpar fila", key="clear_active_learning"):
+            with st.expander("Active learning queue", expanded=False):
+                if st.button("Clear queue", key="clear_active_learning"):
                     st.session_state.active_learning_queue = []
-                    st.success("Fila de aprendizado esvaziada.")
+                    st.success("Learning queue emptied.")
                 for idx, item in enumerate(st.session_state.active_learning_queue[-5:], 1):
-                    st.markdown(f"**Caso {idx}**")
+                    st.markdown(f"**Case {idx}**")
                     st.caption(item["reason"])
-                    st.text(f"Pergunta: {item['user']}")
-                    st.text(f"Resposta: {item['bot']}")
+                    st.text(f"Question: {item['user']}")
+                    st.text(f"Answer: {item['bot']}")
         else:
-            st.caption("Sem itens na fila de aprendizado ativo no momento.")
+            st.caption("No items in the active learning queue at the moment.")
 
         if st.session_state.confidence_history:
             last_conf = st.session_state.confidence_history[-1]
             st.metric(
-                "Confianca da ultima resposta",
+                "Confidence of the last response",
                 f"{last_conf['label']} ({last_conf['score']})",
             )
             if len(st.session_state.confidence_history) > 3:
                 scope = st.session_state.confidence_history[-3:]
                 average = sum(item["score"] for item in scope) / len(scope)
-                st.caption(f"Media das ultimas respostas: {average:.2f}")
+                st.caption(f"Average of the last responses: {average:.2f}")
 
         if st.session_state.planner_state:
             st.caption(
-                "Plano atual: "
+                "Current plan: "
                 + st.session_state.planner_state.get("stage", "")
                 + " -> "
                 + st.session_state.planner_state.get("next_action", "")
@@ -2761,7 +2761,7 @@ def render_patient_panel() -> None:
 
         st.markdown("---")
         wearable_input = st.text_area(
-            "Dados de wearables (cole JSON com batimentos, saturacao, etc.)",
+            "Wearable data (paste JSON with heart rate, saturation, etc.)",
             value=st.session_state.wearable_raw_input,
         )
         if wearable_input != st.session_state.wearable_raw_input:
@@ -2770,7 +2770,7 @@ def render_patient_panel() -> None:
                 try:
                     st.session_state.wearable_payload = json.loads(wearable_input)
                 except json.JSONDecodeError:
-                    st.warning("JSON invalido para dados de wearables.")
+                    st.warning("Invalid JSON for wearable data.")
             else:
                 st.session_state.wearable_payload = {}
             refresh_multiexam_reasoning()
@@ -2778,20 +2778,20 @@ def render_patient_panel() -> None:
         st.markdown("---")
         st.subheader("Multimodal")
         voice_text = st.text_area(
-            "Transcricao de voz (cole resultado do STT)",
+            "Voice transcription (paste STT result)",
             key="voice_transcript_area",
         )
-        if st.button("Enviar transcricao para o chat"):
+        if st.button("Send transcription to chat"):
             if voice_text.strip():
                 st.session_state.pending_voice_input = voice_text.strip()
-                st.success("Transcricao enviada para o chat.")
+                st.success("Transcription sent to chat.")
             else:
-                st.warning("Informe um texto antes de enviar.")
+                st.warning("Enter some text before sending.")
 
-        st.checkbox("Gerar audio das respostas (usa gTTS se disponivel)", key="audio_toggle")
+        st.checkbox("Generate audio for responses (uses gTTS if available)", key="audio_toggle")
 
         st.markdown("---")
-        if st.button("Salvar resumo da consulta"):
+        if st.button("Save consultation summary"):
             record = st.session_state.history_manager.save(
                 st.session_state.history,
                 {
@@ -2800,13 +2800,13 @@ def render_patient_panel() -> None:
                     "medication_alerts": st.session_state.medication_alerts,
                 },
             )
-            st.success("Resumo armazenado.")
+            st.success("Summary stored.")
             st.json(record)
 
         if st.session_state.consultation_log:
-            with st.expander("Historico inteligente", expanded=False):
+            with st.expander("Smart history", expanded=False):
                 for idx, record in enumerate(st.session_state.consultation_log, start=1):
-                    st.markdown(f"**Consulta {idx}**")
+                    st.markdown(f"**Consultation {idx}**")
                     st.text(record["summary"])
 
 
@@ -2814,13 +2814,13 @@ def render_voice_agent_panel() -> None:
     st.markdown(
         """
         <div class='themed-panel' style='text-align:center; background: linear-gradient(120deg, rgba(99,102,241,0.12), rgba(6,182,212,0.12));'>
-            <h3 style='margin-bottom:0.3em;'>🎤 MedIA Voz com Gemini</h3>
+            <h3 style='margin-bottom:0.3em;'>🎤 MedIA Voice with Gemini</h3>
             <p style='font-size:0.95em; color:#475569; margin:0 auto; max-width:520px;'>
-                Grave uma mensagem curta e deixe o Gemini AI Studio transcrever e responder em tempo real.
-                A transcrição é enviada para o chat principal para manter todo mundo sincronizado.
+                Record a short message and let Gemini AI Studio transcribe and respond in real time.
+                The transcription is sent to the main chat to keep everyone in sync.
             </p>
             <p style='font-size:0.8em; color:#94a3b8; margin:0 auto; max-width:520px;'>
-                Usa o modelo <strong>gemini-2.5-flash</strong> (1.048.576 tokens de entrada / 65.536 de saída, multimodal com texto+imagem+video+audio).
+                Uses the <strong>gemini-2.5-flash</strong> model (1,048,576 input tokens / 65,536 output, multimodal with text+image+video+audio).
             </p>
         </div>
         """,
@@ -2829,41 +2829,41 @@ def render_voice_agent_panel() -> None:
 
     if not gemini_sdk_available():
         st.warning(
-            "Instale `google-genai` (SDK oficial) ou `google-generativeai` para habilitar o agente de voz."
+            "Install `google-genai` (official SDK) or `google-generativeai` to enable the voice agent."
         )
         return
 
     agent = get_voice_agent()
     if agent is None or not agent.available():
         st.warning(
-            "Configure a variavel `GEMINI_API_KEY` (ou use a integrada no codigo) para habilitar o agente de voz."
+            "Set the `GEMINI_API_KEY` variable (or use the one bundled in the code) to enable the voice agent."
         )
         return
 
     audio_file = st.audio_input(
-        "Grave sua pergunta (max. 30s). Toque no microfone, aguarde e clique em 'Enviar voz'.",
+        "Record your question (max. 30s). Tap the microphone, wait and click 'Send voice'.",
         key="voice_audio_input",
     )
     send_col, clear_col = st.columns([3, 1])
     with send_col:
         send_voice = st.button(
-            "Enviar mensagem de voz",
+            "Send voice message",
             key="send_voice_button",
             use_container_width=True,
         )
     with clear_col:
         if st.button(
-            "Limpar voz",
+            "Clear voice",
             key="clear_voice_history",
             use_container_width=True,
         ):
             st.session_state.voice_conversation = []
-            st.session_state.voice_agent_status = "Histórico de voz reiniciado."
-            st.success("Histórico do agente de voz limpo.")
+            st.session_state.voice_agent_status = "Voice history reset."
+            st.success("Voice agent history cleared.")
 
     if send_voice:
         if audio_file is None:
-            st.warning("Grave uma mensagem antes de enviar.")
+            st.warning("Record a message before sending.")
         else:
             audio_bytes = audio_file.getvalue()
             mime_type = audio_file.type or "audio/wav"
@@ -2871,22 +2871,22 @@ def render_voice_agent_panel() -> None:
             transcript = ""
             reply = ""
             try:
-                with st.spinner("Conversando com o Gemini..."):
+                with st.spinner("Talking to Gemini..."):
                     result = agent.transcribe_and_respond(
                         audio=audio_bytes,
                         mime_type=mime_type,
                     )
             except Exception as exc:
                 error_text = str(exc)
-                st.session_state.voice_agent_status = f"Erro ao acionar Gemini: {error_text}"
+                st.session_state.voice_agent_status = f"Error calling Gemini: {error_text}"
                 if "404" in error_text and "models" in error_text:
                     st.error(
-                        "Modelo Gemini não encontrado para esta API. Execute `client.models.list()` ou defina "
+                        "Gemini model not found for this API. Run `client.models.list()` or set "
                         "`GEMINI_MODEL_NAME=models/gemini-2.5-flash`."
                     )
                 else:
                     st.error(
-                        "Não foi possível entender o áudio agora. Verifique a conexão e tente novamente."
+                        "Could not understand the audio right now. Check the connection and try again."
                     )
             if result:
                 transcript = result.get("transcription", "")
@@ -2904,28 +2904,28 @@ def render_voice_agent_panel() -> None:
                 history.append(entry)
                 st.session_state.voice_conversation = history[-6:]
                 st.session_state.voice_agent_status = (
-                    f"Última resposta em {latency:.1f}s usando {agent.model_name}."
+                    f"Last response in {latency:.1f}s using {agent.model_name}."
                 )
                 if transcript:
                     st.session_state.pending_voice_input = transcript
-                    st.info("Transcrição enviada automaticamente para o chat principal.")
+                    st.info("Transcription automatically sent to the main chat.")
 
     if st.session_state.voice_agent_status:
         st.caption(st.session_state.voice_agent_status)
 
     if not st.session_state.voice_conversation:
-        st.caption("Interaja por voz para ver transcrições e respostas aqui.")
+        st.caption("Interact by voice to see transcriptions and responses here.")
         return
 
-    st.markdown("#### Histórico de voz")
+    st.markdown("#### Voice history")
     for idx, item in enumerate(reversed(st.session_state.voice_conversation), start=1):
         st.markdown(
             f"""
             <div class='themed-panel' style='padding:16px; margin-bottom:8px; text-align:left;'>
-                <div style='font-size:0.85em; color:#94a3b8;'>Interação #{len(st.session_state.voice_conversation) - idx + 1}</div>
-                <p><strong>Paciente:</strong> {item.get('patient', '---')}</p>
-                <p><strong>MedIA Voz:</strong> {item.get('agent', '---')}</p>
-                <p style='font-size:0.85em; color:#94a3b8;'>Latência: {item.get('latency', 0.0):.1f}s</p>
+                <div style='font-size:0.85em; color:#94a3b8;'>Interaction #{len(st.session_state.voice_conversation) - idx + 1}</div>
+                <p><strong>Patient:</strong> {item.get('patient', '---')}</p>
+                <p><strong>MedIA Voice:</strong> {item.get('agent', '---')}</p>
+                <p style='font-size:0.85em; color:#94a3b8;'>Latency: {item.get('latency', 0.0):.1f}s</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -2937,8 +2937,8 @@ def render_voice_agent_panel() -> None:
 def render_quick_prompt_bar() -> None:
     if not QUICK_PROMPTS:
         return
-    st.markdown("#### Sugestoes rapidas")
-    st.caption("Clique em um atalho para preencher o chat com uma pergunta comum.")
+    st.markdown("#### Quick suggestions")
+    st.caption("Click a shortcut to fill the chat with a common question.")
     columns = st.columns(len(QUICK_PROMPTS))
     triggered_label: Optional[str] = None
     for idx, prompt in enumerate(QUICK_PROMPTS):
@@ -2948,11 +2948,11 @@ def render_quick_prompt_bar() -> None:
             st.session_state.pending_voice_input = text
             triggered_label = label
     if triggered_label:
-        st.success(f"Atalho '{triggered_label}' enviado para o chat. Ajuste o texto antes de enviar se desejar.")
+        st.success(f"Shortcut '{triggered_label}' sent to the chat. Adjust the text before sending if you wish.")
 
 
 def render_history() -> None:
-    st.subheader("Respostas do MedIA")
+    st.subheader("MedIA responses")
     if st.session_state.history:
         st.markdown(
             "<div id='chat-history' style='display: flex; flex-direction: column;'>"
@@ -2963,18 +2963,18 @@ def render_history() -> None:
 
 
 def render_report_viewer() -> None:
-    st.markdown("### Visualizacao do relatorio")
+    st.markdown("### Report view")
     report_text = build_final_report_text()
     st.text_area(
-        "Resumo consolidado (.txt)",
+        "Consolidated summary (.txt)",
         value=report_text,
         height=260,
         disabled=True,
     )
     st.download_button(
-        "Baixar relatorio completo (.txt)",
+        "Download full report (.txt)",
         data=report_text.encode("utf-8"),
-        file_name="medIA_relatorio.txt",
+        file_name="medIA_report.txt",
         mime="text/plain",
         use_container_width=True,
     )
@@ -2987,10 +2987,10 @@ def render_report_viewer() -> None:
         )
         score = report_dict.get("processamento", {}).get("pontuacao", 0)
         st.progress(min(score / 3, 1.0))
-        with st.expander("Relatorio completo (JSON)", expanded=False):
+        with st.expander("Full report (JSON)", expanded=False):
             st.json(report_dict)
     else:
-        st.caption("Nenhuma triagem automática gerada ainda.")
+        st.caption("No automatic triage generated yet.")
 
 def render_primary_workspace() -> None:
     groq_api_key = os.environ.get("GROQ_API_KEY")
@@ -3000,7 +3000,7 @@ def render_primary_workspace() -> None:
         except Exception:
             pass
     if not groq_api_key:
-        st.error("GROQ_API_KEY nao encontrado. Configure a chave nas variaveis de ambiente ou em st.secrets.")
+        st.error("GROQ_API_KEY not found. Set the key in the environment variables or in st.secrets.")
         return
     default_model = "llama-3.3-70b-versatile"
     model_aliases = {
@@ -3018,38 +3018,38 @@ def render_primary_workspace() -> None:
     resolved_model = model_aliases.get(original_model, original_model)
     if resolved_model != original_model:
         st.info(
-            f"Modelo '{original_model}' foi substituido automaticamente por '{resolved_model}'. "
-            "Atualize GROQ_MODEL_NAME para evitar esta mensagem."
+            f"Model '{original_model}' was automatically replaced by '{resolved_model}'. "
+            "Update GROQ_MODEL_NAME to avoid this message."
         )
     model = resolved_model
     try:
         groq_client = Groq(api_key=groq_api_key)
     except Exception as exc:
-        st.error("Falha ao inicializar o cliente Groq. Verifique a chave de API.")
+        st.error("Failed to initialize the Groq client. Check the API key.")
         st.code(str(exc))
         return
 
     st.write(
-        "Sou um sistema de apoio medico com analise de exames e radiografias. "
-        "Sempre consulte um profissional de saude para confirmacao."
+        "I am a medical support system with exam and radiograph analysis. "
+        "Always consult a healthcare professional for confirmation."
     )
 
     system_prompt = (
-        "Voce e um assistente medico virtual flexivel. Quando o usuario relatar sintomas e desejar suporte clinico, "
-        "ofereca realizar uma triagem estruturada com ate 10 perguntas numeradas, mas permita que ele interrompa ou "
-        "pule etapas a qualquer momento. Nao limite a conversa a triagem: responda imediatamente perguntas diretas "
-        "sobre doencas, sintomas, exames, medicamentos, prevencao ou orientacoes gerais, mesmo durante a triagem. "
-        "Use os conteudos de exames, radiografias e dados de wearables enviados para enriquecer a resposta quando possivel. "
-        "Sempre forneca diagnosticos diferenciais provaveis, exames complementares sugeridos e orientacoes de cuidado, "
-        "indicando quando um especialista humano deve ser consultado. Caso o usuario solicite calculo de IMC ou outras "
-        "informacoes especificas, atenda prontamente e retome a triagem apenas se ele quiser prosseguir. "
-        "Quando detectar sinais criticos, priorize orientacao emergencial. "
-        "Quando houver relatorios da triagem de enfermagem do Hackathon, considere os alertas e encaminhamentos sugeridos "
-        "e destaque os principais riscos e prioridades clinicas ao responder. "
-        "Mantenha o dialogo aberto apos concluir as perguntas, dando continuidade a duvidas ou novas solicitacoes sem forcar reinicio."
+        "You are a flexible virtual medical assistant. When the user reports symptoms and wants clinical support, "
+        "offer to run a structured triage with up to 10 numbered questions, but allow them to interrupt or "
+        "skip steps at any time. Do not limit the conversation to triage: immediately answer direct questions "
+        "about diseases, symptoms, exams, medications, prevention or general guidance, even during triage. "
+        "Use the contents of submitted exams, radiographs and wearable data to enrich the response when possible. "
+        "Always provide likely differential diagnoses, suggested complementary exams and care guidance, "
+        "indicating when a human specialist should be consulted. If the user requests a BMI calculation or other "
+        "specific information, comply promptly and resume triage only if they want to continue. "
+        "When you detect critical signs, prioritize emergency guidance. "
+        "When nursing-triage reports from the Hackathon are present, consider the suggested alerts and referrals "
+        "and highlight the main clinical risks and priorities when responding. "
+        "Keep the dialogue open after finishing the questions, following up on doubts or new requests without forcing a restart."
     )
 
-    triage_tab, profile_tab, report_tab = st.tabs(["Triagem", "Perfil & triagem", "Relatorio"])
+    triage_tab, profile_tab, report_tab = st.tabs(["Triage", "Profile & triage", "Report"])
 
     with triage_tab:
         render_voice_agent_panel()
@@ -3062,14 +3062,14 @@ const chat = document.getElementById('chat-history');
 if (chat) { chat.scrollTop = chat.scrollHeight; }
 </script>""", unsafe_allow_html=True)
 
-        user_input = st.chat_input("💬 Digite seus sintomas ou faça uma pergunta médica...", key="user_input")
+        user_input = st.chat_input("💬 Type your symptoms or ask a medical question...", key="user_input")
         if not user_input and st.session_state.pending_voice_input:
             user_input = st.session_state.pending_voice_input
             st.session_state.pending_voice_input = ""
 
         if user_input:
             st.session_state.history.append(
-                f"<div class='message user-message'><strong>Voce:</strong> {user_input}</div>"
+                f"<div class='message user-message'><strong>You:</strong> {user_input}</div>"
             )
 
             normalized_input = user_input.strip().lower()
@@ -3104,7 +3104,7 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
                 st.session_state.guideline_cha2ds2 = None
                 st.session_state.guideline_curb65 = None
                 refresh_multiexam_reasoning()
-                st.success("Conversa e contexto reiniciados.")
+                st.success("Conversation and context reset.")
                 st.rerun()
 
             start_keywords = [
@@ -3188,7 +3188,7 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
                 summary = summarize_symptom_log(st.session_state.symptom_log)
                 response_text = (
                     summary
-                    + "\n\nSempre consulte um profissional de saude para interpretacao completa."
+                    + "\n\nAlways consult a healthcare professional for a full interpretation."
                 )
                 st.session_state.history.append(
                     f"<div class='message ai-message'><strong>MedIA:</strong> {response_text}</div>"
@@ -3226,21 +3226,21 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
                 model_error_context = {"type": "unknown", "detail": error_text}
                 if "is not supported" in error_text.lower():
                     friendly = (
-                        "MedIA: o modelo configurado não está disponível. "
-                        "Atualize o nome do modelo no .env ou nas variáveis de ambiente."
+                        "MedIA: the configured model is not available. "
+                        "Update the model name in .env or in the environment variables."
                     )
                     st.error(
-                        "Modelo Groq configurado foi descontinuado. Atualize `GROQ_MODEL_NAME` para um modelo suportado "
-                        "(ex.: llama-3.3-70b-versatile ou llama-3.1-8b-instant)."
+                        "The configured Groq model has been decommissioned. Update `GROQ_MODEL_NAME` to a supported model "
+                        "(e.g., llama-3.3-70b-versatile or llama-3.1-8b-instant)."
                     )
                     model_error_context["type"] = "model_decommissioned"
                     model_error_context["detail"] = error_text
                 else:
                     friendly = (
-                        "MedIA: nao foi possivel gerar uma resposta agora porque o pedido excedeu os limites "
-                        "do modelo. Remova alguns anexos ou reduza o texto e tente novamente."
+                        "MedIA: a response could not be generated right now because the request exceeded the model's "
+                        "limits. Remove some attachments or reduce the text and try again."
                     )
-                    st.error("Falha ao acionar o modelo Groq (BadRequest). Ajuste o contexto e tente de novo.")
+                    st.error("Failed to call the Groq model (BadRequest). Adjust the context and try again.")
                     model_error_context["type"] = "context_limit"
                     model_error_context["detail"] = error_text
                 st.session_state.history.append(
@@ -3257,13 +3257,13 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
             except Exception as exc:  # pragma: no cover - resiliencia
                 pop_last_memory_message()
                 friendly = (
-                    "MedIA encontrou um erro inesperado ao gerar a resposta. "
-                    "Atualize ou tente novamente em instantes."
+                    "MedIA hit an unexpected error while generating the response. "
+                    "Refresh or try again shortly."
                 )
                 st.session_state.history.append(
                     f"<div class='message ai-message error'><strong>MedIA:</strong> {friendly}</div>"
                 )
-                st.error(f"Erro inesperado ao consultar o modelo: {exc}")
+                st.error(f"Unexpected error while querying the model: {exc}")
                 return
 
             enriched_response = st.session_state.validator.attach_disclaimer(response, context_meta)
@@ -3313,7 +3313,7 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
                     st.session_state.audio_responses.append(audio_bytes)
                     st.audio(audio_bytes, format="audio/mp3")
                 else:
-                    st.warning("gTTS nao disponivel ou falha ao gerar audio.")
+                    st.warning("gTTS unavailable or failed to generate audio.")
 
             st.rerun()
     with profile_tab:
@@ -3345,7 +3345,7 @@ def main() -> None:
     st.title("MedIA")
     if _groq_import_error is not None:
         st.error(
-            "O SDK `groq` nao foi encontrado. Instale-o com `pip install groq` para usar a integracao com o modelo."
+            "The `groq` SDK was not found. Install it with `pip install groq` to use the model integration."
         )
         st.code(str(_groq_import_error))
         return

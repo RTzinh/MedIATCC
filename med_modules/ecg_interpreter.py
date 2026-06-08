@@ -27,7 +27,7 @@ class ECGInterpreter:
         if not pyedflib:
             return {
                 "exam_id": exam.get("id"),
-                "summary": "pyedflib ausente; nao foi possivel extrair derivacoes EDF.",
+                "summary": "pyedflib missing; could not extract EDF leads.",
             }
         import tempfile  # local import to avoid overhead if module missing
 
@@ -45,12 +45,12 @@ class ECGInterpreter:
                 "lead_count": len(signal_labels),
                 "sampling_rate": sample_frequency,
                 "duration": duration,
-                "summary": f"{len(signal_labels)} derivacoes EDF; SR={sample_frequency}Hz; T={duration:.1f}s.",
+                "summary": f"{len(signal_labels)} EDF leads; SR={sample_frequency}Hz; T={duration:.1f}s.",
             }
         except Exception as exc:  # pragma: no cover - defensive
             return {
                 "exam_id": exam.get("id"),
-                "summary": f"Falha ao ler EDF: {exc}",
+                "summary": f"Failed to read EDF: {exc}",
             }
 
     def _analyze_hl7(self, exam: Dict[str, Any], content: bytes) -> Optional[Dict[str, Any]]:
@@ -61,9 +61,9 @@ class ECGInterpreter:
             return None
         for line in text.splitlines():
             if line.startswith("OBX") and "PR" in line:
-                snapshot.append("Intervalo PR reportado via HL7.")
+                snapshot.append("PR interval reported via HL7.")
             if "QRS" in line.upper():
-                snapshot.append("Segmento QRS identificado em mensagem HL7.")
+                snapshot.append("QRS segment identified in HL7 message.")
         if not snapshot:
             return None
         return {

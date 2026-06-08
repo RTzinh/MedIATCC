@@ -13,30 +13,30 @@ class GuidelineAdvisor:
         factors = []
         if history.get("congestive_heart_failure"):
             score += 1
-            factors.append("ICC")
+            factors.append("CHF")
         if history.get("hypertension"):
             score += 1
-            factors.append("Ha")
+            factors.append("HTN")
         if age is not None:
             if age >= 75:
                 score += 2
-                factors.append("Idade>=75")
+                factors.append("Age>=75")
             elif age >= 65:
                 score += 1
-                factors.append("Idade 65-74")
+                factors.append("Age 65-74")
         if history.get("diabetes"):
             score += 1
             factors.append("DM")
         if history.get("stroke_tia"):
             score += 2
-            factors.append("AVE/AIT")
+            factors.append("Stroke/TIA")
         if history.get("vascular_disease"):
             score += 1
-            factors.append("Doenca vascular")
+            factors.append("Vascular disease")
         if sex and sex.lower().startswith("f"):
             score += 1
-            factors.append("Sexo feminino")
-        recommendation = "Considerar anticoagulacao oral." if score >= 2 else "Avaliar risco/beneficio individual."
+            factors.append("Female sex")
+        recommendation = "Consider oral anticoagulation." if score >= 2 else "Assess individual risk/benefit."
         return {
             "score": score,
             "factors": factors,
@@ -57,26 +57,26 @@ class GuidelineAdvisor:
         if age is not None and age >= 65:
             score += 1
         recommendations = {
-            0: "Tratamento ambulatorial geralmente adequado.",
-            1: "Avaliar comorbidades antes de decidir local de tratamento.",
-            2: "Considerar internacao hospitalar.",
-            3: "Avaliar em unidade de maior complexidade.",
-            4: "Alto risco; UTI ou monitorizacao intensiva.",
-            5: "Alto risco; UTI ou monitorizacao intensiva.",
+            0: "Outpatient treatment is usually appropriate.",
+            1: "Assess comorbidities before deciding the treatment setting.",
+            2: "Consider hospital admission.",
+            3: "Evaluate in a higher-complexity unit.",
+            4: "High risk; ICU or intensive monitoring.",
+            5: "High risk; ICU or intensive monitoring.",
         }
         return {
             "score": score,
-            "recommendation": recommendations.get(score, "Sem diretriz."),
+            "recommendation": recommendations.get(score, "No guideline."),
         }
 
     def suggest_next_steps(self, *, has_high_risk_lab: bool, imaging_flags: bool, ecg_red_flags: bool) -> Dict[str, Any]:
         plan = []
         if has_high_risk_lab:
-            plan.append("Repetir marcadores laboratoriais essenciais em 24-48h.")
+            plan.append("Repeat essential laboratory markers in 24-48h.")
         if imaging_flags:
-            plan.append("Encaminhar imagens para segunda leitura de radiologista.")
+            plan.append("Refer images for a radiologist's second read.")
         if ecg_red_flags:
-            plan.append("Encaminhar para avaliacao cardiologica urgente.")
+            plan.append("Refer for urgent cardiology evaluation.")
         if not plan:
-            plan.append("Manter acompanhamento ambulatorial com educacao do paciente.")
+            plan.append("Keep outpatient follow-up with patient education.")
         return {"plan": plan}

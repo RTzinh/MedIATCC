@@ -26,7 +26,7 @@ class MultiexamReasoner:
                     if isinstance(item, dict)
                 )
                 if markers:
-                    notes.append(f"Painel {alert.get('panel')}: {markers}.")
+                    notes.append(f"Panel {alert.get('panel')}: {markers}.")
                 for trend in alert.get("trend_summary", []):
                     notes.append(trend)
 
@@ -44,12 +44,12 @@ class MultiexamReasoner:
             if hr and spo2 and isinstance(hr, (int, float)) and isinstance(spo2, (int, float)):
                 if hr > 110 and spo2 < 92:
                     conflicting.append(
-                        "Taquicardia com queda de SpO₂ sugerem investigar causas respiratorias."
+                        "Tachycardia with a drop in SpO₂ suggests investigating respiratory causes."
                     )
             variability = wearable_snapshot.get("hrv")
             if variability and isinstance(variability, (int, float)) and variability < 20:
                 notes.append(
-                    "Variabilidade da frequencia cardiaca reduzida; avaliar estresse autonomico."
+                    "Reduced heart rate variability; assess autonomic stress."
                 )
 
         return {

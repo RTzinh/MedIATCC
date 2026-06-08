@@ -25,16 +25,16 @@ def load_payload(path: Path) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Executa a pipeline de triagem do Hackathon.")
+    parser = argparse.ArgumentParser(description="Runs the Hackathon triage pipeline.")
     parser.add_argument(
         "--input",
         default="examples/hackathon_triage_input.json",
-        help="JSON com dados coletados pela enfermagem.",
+        help="JSON with data collected by the nursing staff.",
     )
     parser.add_argument(
         "--output",
         default="examples/hackathon_triage_output.json",
-        help="Arquivo onde o relatorio estruturado sera salvo.",
+        help="File where the structured report will be saved.",
     )
     args = parser.parse_args()
 
@@ -51,9 +51,9 @@ def main() -> None:
         encoding="utf-8",
     )
 
-    print("Resumo da triagem:")
+    print("Triage summary:")
     print(report.summary_markdown())
-    print(f"\nRelatorio salvo em: {output_path}")
+    print(f"\nReport saved to: {output_path}")
 
 
 if __name__ == "__main__":

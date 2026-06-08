@@ -57,7 +57,7 @@ class AdvancedLabInterpreter:
             return None
 
         exam_id = exam.get("id", "")
-        panel = normalized.get("panel") or exam.get("name") or "painel-desconhecido"
+        panel = normalized.get("panel") or exam.get("name") or "unknown-panel"
 
         alerts: List[LabAlert] = []
         if lab_ranges:
@@ -81,7 +81,7 @@ class AdvancedLabInterpreter:
         trend_summary = self._summarize_trends(panel=panel, marker_alerts=alerts)
         demographics_note = ""
         if demographics:
-            demographics_note = f"Perfil aplicado: {demographics}."
+            demographics_note = f"Profile applied: {demographics}."
 
         external_findings: Optional[Dict[str, Any]] = None
         if self._external_pipeline:
@@ -95,11 +95,11 @@ class AdvancedLabInterpreter:
             except Exception as exc:  # pragma: no cover - defensive
                 alerts.append(
                     LabAlert(
-                        marker="pipeline_externo",
+                        marker="external_pipeline",
                         value=0.0,
                         reference=(0.0, 0.0),
                         severity="moderado",
-                        rationale=f"Falha ao acionar pipeline externo: {exc}",
+                        rationale=f"Failed to run external pipeline: {exc}",
                     )
                 )
 
@@ -134,9 +134,9 @@ class AdvancedLabInterpreter:
             severity = "moderado"
             rationale = ""
             if value < low:
-                rationale = f"Valor {value} abaixo do intervalo ({low}-{high})."
+                rationale = f"Value {value} below the range ({low}-{high})."
             elif value > high:
-                rationale = f"Valor {value} acima do intervalo ({low}-{high})."
+                rationale = f"Value {value} above the range ({low}-{high})."
             if rationale:
                 if abs(value - (high if value > high else low)) / (high - low + 1e-6) > 0.6:
                     severity = "alto"
@@ -174,9 +174,9 @@ class AdvancedLabInterpreter:
             except (TypeError, ValueError):
                 continue
             delta = alert.value - past_float
-            direction = "aumentou" if delta > 0 else "reduziu"
+            direction = "increased" if delta > 0 else "decreased"
             trends.append(
-                f"{alert.marker} {direction} {abs(delta):.2f} desde o exame anterior."
+                f"{alert.marker} {direction} by {abs(delta):.2f} since the previous exam."
             )
         return trends
 

@@ -25,56 +25,56 @@
     ]
   },
   "processamento": {
-    "data_processamento": "2025-11-08T14:22:57.082540Z",
-    "risco": "Critico",
+    "data_processamento": "2026-06-08T00:45:44.191438Z",
+    "risco": "Critical",
     "pontuacao": 3,
     "audit_trail": [
       {
-        "metric": "PA",
-        "message": "Pressao critica compativel com urgencia hipertensiva.",
-        "impact": "Critico"
+        "metric": "BP",
+        "message": "Critical blood pressure consistent with hypertensive emergency.",
+        "impact": "Critical"
       },
       {
-        "metric": "FC",
-        "message": "Taquicardia moderada observada.",
-        "impact": "Alto"
+        "metric": "HR",
+        "message": "Moderate tachycardia observed.",
+        "impact": "High"
       },
       {
         "metric": "SpO2",
-        "message": "Saturacao levemente reduzida, monitorar.",
-        "impact": "Alto"
+        "message": "Slightly reduced saturation, monitor.",
+        "impact": "High"
       },
       {
-        "metric": "Sintomas",
-        "message": "Sintoma relatado: dor no peito com irradiacao.",
-        "impact": "Critico"
+        "metric": "Symptoms",
+        "message": "Reported symptom: dor no peito com irradiacao.",
+        "impact": "Critical"
       },
       {
-        "metric": "Sintomas",
-        "message": "Sintoma relatado: falta de ar em repouso.",
-        "impact": "Critico"
+        "metric": "Symptoms",
+        "message": "Reported symptom: falta de ar em repouso.",
+        "impact": "Critical"
       }
     ],
     "sugestoes_exames": [
-      "Verificar glicemia capilar e ECG basico.",
-      "Conferir interacoes com medicacoes em uso continuo."
+      "Check capillary blood glucose and a basic ECG.",
+      "Check interactions with continuous-use medications."
     ]
   },
   "relatorio": {
-    "risco": "Critico",
-    "prioridade": "Emergencia / sala vermelha",
+    "risco": "Critical",
+    "prioridade": "Emergency / red room",
     "alertas": [
-      "Pressao critica compativel com urgencia hipertensiva.",
-      "Taquicardia moderada observada.",
-      "Saturacao levemente reduzida, monitorar.",
-      "Sintoma relatado: dor no peito com irradiacao.",
-      "Sintoma relatado: falta de ar em repouso.",
-      "Alergias registradas: Dipirona"
+      "Critical blood pressure consistent with hypertensive emergency.",
+      "Moderate tachycardia observed.",
+      "Slightly reduced saturation, monitor.",
+      "Reported symptom: dor no peito com irradiacao.",
+      "Reported symptom: falta de ar em repouso.",
+      "Recorded allergies: Dipirona"
     ],
     "encaminhamentos": [
-      "Encaminhar imediatamente para sala de emergencia.",
-      "Acionar protocolo de emergencia."
+      "Refer immediately to the emergency room.",
+      "Activate the emergency protocol."
     ],
-    "justificativa": "Sintoma relatado: falta de ar em repouso."
+    "justificativa": "Reported symptom: falta de ar em repouso."
   }
 }
