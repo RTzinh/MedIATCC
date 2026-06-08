@@ -36,9 +36,9 @@ python -m venv .venv
 pip install -r requirements.txt
 
 set GROQ_API_KEY=your_token
-set GEMINI_API_KEY=your_token    # optional (a test key already ships in the code)
-set SUPABASE_URL=https://cwvapgovcsqspaukible.supabase.co
-set SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+set GEMINI_API_KEY=your_token    # optional (voice panel only)
+set SUPABASE_URL=your_supabase_project_url
+set SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
 streamlit run app.py
 ```

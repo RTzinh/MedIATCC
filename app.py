@@ -200,7 +200,7 @@ def register_external_services() -> None:
 DEFAULT_GEMINI_API_KEY = (
     os.environ.get("GEMINI_API_KEY")
     or os.environ.get("GOOGLE_API_KEY")
-    or "AIzaSyCag_eYIGTTZfw-xSUw8iERcNuroOZO7G4"
+    or ""
 )
 DEFAULT_GEMINI_MODEL = os.environ.get("GEMINI_MODEL_NAME", "gemini-2.5-flash")
 VOICE_AGENT_INSTRUCTIONS = (
@@ -1389,9 +1389,9 @@ def analyze_exam_item(item: Dict[str, Any]) -> List[str]:
 
 
 def apply_theme_settings() -> None:
-    theme = st.session_state.get("theme", "Claro")
+    theme = st.session_state.get("theme", "Light")
     font_scale = st.session_state.get("font_scale", 1.0)
-    palette = THEME_STYLES.get(theme, THEME_STYLES["Claro"])
+    palette = THEME_STYLES.get(theme, THEME_STYLES["Light"])
     css = f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
