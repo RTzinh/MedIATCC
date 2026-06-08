@@ -16,6 +16,27 @@ The project combines exam analysis, AI conversation and a dedicated workflow for
 
 ---
 
+## 🎬 Screenshots
+
+Captured from a real local run (English UI).
+
+### Triage workspace
+The conversational triage tab with the Gemini voice panel, quick suggestion shortcuts and the chat input.
+
+![Triage workspace](assets/triage.png)
+
+### Profile & triage
+The structured patient-data form used for fast nursing triage (demographics, biometrics, blood type and more).
+
+![Profile and triage form](assets/profile.png)
+
+### Report
+The consolidated report view with the auto-generated clinical summary, risk classification, alerts and `.txt`/JSON downloads.
+
+![Report view](assets/report.png)
+
+---
+
 ## Tech Stack
 
 - Python 3.12
