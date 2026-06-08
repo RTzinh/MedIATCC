@@ -120,7 +120,9 @@ def generate_triage_report(payload: NursingTriageInput) -> TriagePipelineOutput:
         elif payload.spo2 < 94:
             add_alert("SpO2", "Slightly reduced saturation, monitor.", 2)
 
-    # Symptoms (keys match the patient's Portuguese symptom input)
+    # Symptoms (keys match the patient's symptom input; bilingual PT + EN).
+    # English entries are added alongside the Portuguese ones with the SAME
+    # severity values so triage scoring is unchanged for Portuguese input.
     symptom_flags = {
         "dor no peito": 3,
         "falta de ar": 3,
@@ -130,6 +132,24 @@ def generate_triage_report(payload: NursingTriageInput) -> TriagePipelineOutput:
         "febre": 1,
         "tontura": 1,
         "desmaio": 2,
+        # English equivalents (same severities)
+        "chest pain": 3,
+        "shortness of breath": 3,
+        "difficulty breathing": 3,
+        "trouble breathing": 3,
+        "confusion": 3,
+        "seizure": 3,
+        "convulsion": 3,
+        "bleeding": 3,
+        "hemorrhage": 3,
+        "fever": 1,
+        "dizziness": 1,
+        "dizzy": 1,
+        "lightheaded": 1,
+        "fainting": 2,
+        "faint": 2,
+        "passed out": 2,
+        "syncope": 2,
     }
     for symptom in payload.sanitized_symptoms():
         for keyword, severity in symptom_flags.items():
@@ -139,11 +159,24 @@ def generate_triage_report(payload: NursingTriageInput) -> TriagePipelineOutput:
                     suggested_actions.append("Activate the emergency protocol.")
                 break
 
-    # Chronic diseases (matched against Portuguese chronic-condition input)
+    # Chronic diseases (matched against chronic-condition input; bilingual PT + EN).
+    # English terms are added alongside the Portuguese ones; "diabetes" is shared.
     chronic = [c.lower() for c in payload.chronic_conditions]
-    if any(d in chronic for d in ("diabetes", "cardiopatia", "insuficiencia cardiaca")):
+    if any(
+        d in chronic
+        for d in (
+            "diabetes",
+            "cardiopatia",
+            "insuficiencia cardiaca",
+            # English equivalents
+            "heart disease",
+            "cardiac disease",
+            "heart failure",
+            "congestive heart failure",
+        )
+    ):
         suggested_exams.append("Check capillary blood glucose and a basic ECG.")
-    if "asma" in chronic or "dpoc" in chronic:
+    if "asma" in chronic or "dpoc" in chronic or "asthma" in chronic or "copd" in chronic:
         suggested_actions.append("Assess peak expiratory flow.")
 
     # Allergies/meds

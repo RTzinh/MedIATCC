@@ -239,6 +239,12 @@ COMMON_CHRONIC_CONDITIONS = [
     "DPOC",
     "Cardiopatia",
     "Insuficiencia cardiaca",
+    # English equivalents (purely additive UI options)
+    "Hypertension",
+    "Asthma",
+    "COPD",
+    "Heart disease",
+    "Heart failure",
 ]
 COMMON_ALLERGIES = [
     "Dipirona",
@@ -246,12 +252,23 @@ COMMON_ALLERGIES = [
     "Amoxicilina",
     "Penicilina",
     "Losartana",
+    # English equivalents (purely additive UI options)
+    "Dipyrone",
+    "Ibuprofen",
+    "Amoxicillin",
+    "Penicillin",
+    "Losartan",
 ]
 COMMON_MEDICATIONS = [
     "Losartana 50mg",
     "Metformina 850mg",
     "AAS 100mg",
     "Atorvastatina 20mg",
+    # English equivalents (purely additive UI options)
+    "Losartan 50mg",
+    "Metformin 850mg",
+    "ASA 100mg",
+    "Atorvastatin 20mg",
 ]
 
 
@@ -409,6 +426,19 @@ CRITICAL_KEYWORDS = {
     "infarto",
     "avc",
     "convulsao continua",
+    # English equivalents (purely additive)
+    "severe chest pain",
+    "severe shortness of breath",
+    "gunshot",
+    "stab wound",
+    "heavy bleeding",
+    "severe bleeding",
+    "prolonged fainting",
+    "heart attack",
+    "myocardial infarction",
+    "stroke",
+    "continuous seizure",
+    "status epilepticus",
 }
 
 MEDICATION_DATABASE = {
@@ -428,12 +458,38 @@ MEDICATION_DATABASE = {
         "interactions": ["May reduce the effectiveness of oral contraceptives"],
         "contra": ["Allergy to penicillins"],
     },
+    # English-keyed equivalents (same values, purely additive)
+    "ibuprofen": {
+        "interactions": ["May reduce the effect of antihypertensives"],
+        "contra": ["Avoid in advanced kidney disease", "Use with caution in active gastritis"],
+    },
+    "dipyrone": {
+        "interactions": ["Potentiates antihypertensives and anticoagulants"],
+        "contra": ["History of agranulocytosis", "Allergy to pyrazolones"],
+    },
+    "metamizole": {
+        "interactions": ["Potentiates antihypertensives and anticoagulants"],
+        "contra": ["History of agranulocytosis", "Allergy to pyrazolones"],
+    },
+    "acetaminophen": {
+        "interactions": ["Combined use with alcohol increases liver risk"],
+        "contra": ["Severe liver disease without monitoring"],
+    },
+    "amoxicillin": {
+        "interactions": ["May reduce the effectiveness of oral contraceptives"],
+        "contra": ["Allergy to penicillins"],
+    },
 }
 
 STOPWORDS = {
     "com", "pra", "para", "nos", "das", "dos", "uma", "num", "que", "qual", "pelo", "pela",
     "das", "dos", "das", "e", "de", "do", "da", "um", "uma", "em", "no", "na", "os", "as",
     "por", "sem", "ser", "ter", "vai", "vou", "tem", "dor", "estou", "mais", "menos",
+    # English function words (purely additive; only common non-symptom words to
+    # avoid filtering out meaningful English symptoms)
+    "the", "and", "for", "with", "have", "has", "had", "are", "was", "were",
+    "this", "that", "from", "about", "your", "you", "having", "feel", "feeling",
+    "been", "some", "very", "much", "more", "less", "into", "onto",
 }
 
 SYMPTOM_HINTS = {
@@ -466,6 +522,31 @@ SYMPTOM_HINTS = {
     "dor de cabeça",
     "cefaléia",
     "cefaleia",
+    # English symptom hints (purely additive)
+    "pain",
+    "fever",
+    "vomit",
+    "nausea",
+    "anxiety",
+    "chills",
+    "cough",
+    "fatigue",
+    "weakness",
+    "dizziness",
+    "dizzy",
+    "diarrhea",
+    "itching",
+    "rash",
+    "swelling",
+    "burning",
+    "hot",
+    "cold",
+    "cough",
+    "bleeding",
+    "headache",
+    "shortness of breath",
+    "chest pain",
+    "sore throat",
 }
 
 EDUCATION_LIBRARY = {
@@ -517,6 +598,44 @@ EDUCATION_LIBRARY = {
             "url": "https://www.saude.gov/infografico-amamentacao.pdf",
         },
     ],
+    # English-keyed equivalents (same resources, purely additive). Resources are
+    # de-duplicated by (title, url) in recommend_from_text, so no double entries.
+    "hypertension": [
+        {
+            "title": "Practical guide to blood pressure control",
+            "type": "video",
+            "url": "https://www.youtube.com/watch?v=93dnup_pressao",
+        },
+        {
+            "title": "Infographic: reducing dietary sodium",
+            "type": "infographic",
+            "url": "https://www.saude.gov/infografico-sodio.pdf",
+        },
+    ],
+    "mental health": [
+        {
+            "title": "Breathing techniques for anxiety",
+            "type": "audio",
+            "url": "https://www.saude.gov/respiracao-guiada.mp3",
+        },
+        {
+            "title": "Booklet on warning signs of depression",
+            "type": "leaflet",
+            "url": "https://www.saude.gov/cartilha-depressao.pdf",
+        },
+    ],
+    "postpartum": [
+        {
+            "title": "Immediate postpartum care",
+            "type": "video",
+            "url": "https://www.youtube.com/watch?v=84puerperio",
+        },
+        {
+            "title": "Infographic: safe breastfeeding",
+            "type": "infographic",
+            "url": "https://www.saude.gov/infografico-amamentacao.pdf",
+        },
+    ],
 }
 
 THEME_STYLES = {
@@ -557,7 +676,7 @@ MEDICATION_DISCLAIMER = (
 
 MEDICATION_MONOGRAPHS = {
     "roacutan": {
-        "aliases": ["isotretinoina", "isotretinoína", "acutane"],
+        "aliases": ["isotretinoina", "isotretinoína", "acutane", "isotretinoin", "accutane", "roaccutane"],
         "class": "Oral retinoid for the treatment of severe nodular acne",
         "indications": [
             "Nodular or conglobate acne, or acne resistant to other treatments",
@@ -581,7 +700,7 @@ MEDICATION_MONOGRAPHS = {
         ],
     },
     "ibuprofeno": {
-        "aliases": ["ibupr", "brufen", "advil", "motrin"],
+        "aliases": ["ibupr", "brufen", "advil", "motrin", "ibuprofen"],
         "class": "Nonsteroidal anti-inflammatory drug (NSAID)",
         "indications": [
             "Mild to moderate pain (headache, muscle pain, post-operative, dysmenorrhea)",
@@ -608,7 +727,7 @@ MEDICATION_MONOGRAPHS = {
         ],
     },
     "dipirona": {
-        "aliases": ["metamizol", "novalgina", "dipirona sodica", "dipirona sódica"],
+        "aliases": ["metamizol", "novalgina", "dipirona sodica", "dipirona sódica", "dipyrone", "metamizole", "sodium metamizole"],
         "class": "Non-opioid analgesic and antipyretic",
         "indications": [
             "Mild to moderate pain (headache, muscle pain, post-operative)",
@@ -1017,6 +1136,17 @@ class ActiveLearningTracker:
         "procure um profissional imediatamente",
         "sem dados suficientes",
         "modelo configurado foi descontinuado",
+        # English equivalents (purely additive)
+        "i don't know",
+        "i do not know",
+        "i don't have information",
+        "i do not have information",
+        "i can't answer",
+        "i cannot answer",
+        "seek a professional immediately",
+        "not enough data",
+        "insufficient data",
+        "the configured model has been discontinued",
     )
 
     def should_flag(self, user_text: str, bot_text: str, metadata: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, str]]:
@@ -1100,16 +1230,16 @@ class ConversationPlanner:
         lowered = user_text.lower()
         stage = "triage"
         next_action = "Collect additional symptoms."
-        if any(term in lowered for term in ["resultado", "exame", "laudo"]):
+        if any(term in lowered for term in ["resultado", "exame", "laudo", "result", "exam", "test result", "report"]):
             stage = "exam-analysis"
             next_action = "Cross-reference symptoms with submitted exams."
         if state.get("imaging_findings"):
             stage = "image-integration"
             next_action = "Connect imaging findings with the clinical report."
-        if any(term in lowered for term in ["dor intensa", "emergencia", "urgente"]):
+        if any(term in lowered for term in ["dor intensa", "emergencia", "urgente", "severe pain", "emergency", "urgent"]):
             stage = "emergency"
             next_action = "Prioritize immediate emergency guidance."
-        if "imc" in lowered:
+        if "imc" in lowered or "bmi" in lowered:
             next_action = "Run the BMI calculation and wait for a new instruction."
         plan_prompt = (
             f"Current plan: {stage}. Next action: {next_action}. "
@@ -1245,6 +1375,16 @@ def find_medication_query(text: str) -> Optional[str]:
         "como usar",
         "indicacao",
         "efeito colateral",
+        # English equivalents (purely additive)
+        "leaflet",
+        "package insert",
+        "dosage",
+        "dosing",
+        "how to take",
+        "how to use",
+        "indication",
+        "side effect",
+        "side effects",
     )
     if not any(term in lowered for term in trigger_terms):
         return None
@@ -1297,6 +1437,15 @@ LAB_RANGES = {
     "leucocitos": {"low": 4000.0, "high": 11000.0, "unit": "/mm3", "label": "[leucocitos]"},
     "leucócitos": {"low": 4000.0, "high": 11000.0, "unit": "/mm3", "label": "[leucocitos]"},
     "plaquetas": {"low": 150000.0, "high": 450000.0, "unit": "/mm3", "label": "[plaquetas]"},
+    # English-keyed equivalents (same ranges/units, purely additive)
+    "hemoglobin": {"low": 12.0, "high": 17.5, "unit": "g/dL", "label": "[hemoglobin]"},
+    "haemoglobin": {"low": 12.0, "high": 17.5, "unit": "g/dL", "label": "[hemoglobin]"},
+    "red blood cells": {"low": 4.0, "high": 6.0, "unit": "millions/mm3", "label": "[red blood cells]"},
+    "erythrocytes": {"low": 4.0, "high": 6.0, "unit": "millions/mm3", "label": "[erythrocytes]"},
+    "hematocrit": {"low": 37.0, "high": 52.0, "unit": "%", "label": "[hematocrit]"},
+    "white blood cells": {"low": 4000.0, "high": 11000.0, "unit": "/mm3", "label": "[white blood cells]"},
+    "leukocytes": {"low": 4000.0, "high": 11000.0, "unit": "/mm3", "label": "[leukocytes]"},
+    "platelets": {"low": 150000.0, "high": 450000.0, "unit": "/mm3", "label": "[platelets]"},
 }
 
 
@@ -3073,7 +3222,7 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
             )
 
             normalized_input = user_input.strip().lower()
-            if normalized_input in {"limpar conversa", "reset", "reiniciar"}:
+            if normalized_input in {"limpar conversa", "reset", "reiniciar", "clear conversation", "clear chat", "restart", "start over"}:
                 st.session_state.history = []
                 clear_conversation_memory()
                 st.session_state.symptom_log = []
@@ -3114,6 +3263,12 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
                 "fazer triagem",
                 "continuar triagem",
                 "retomar triagem",
+                # English equivalents (purely additive)
+                "start triage",
+                "begin triage",
+                "do triage",
+                "continue triage",
+                "resume triage",
             ]
             stop_keywords = [
                 "parar triagem",
@@ -3121,6 +3276,12 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
                 "cancelar triagem",
                 "finalizar triagem",
                 "sem triagem",
+                # English equivalents (purely additive)
+                "stop triage",
+                "end triage",
+                "cancel triage",
+                "finish triage",
+                "no triage",
             ]
             start_requested = any(keyword in normalized_input for keyword in start_keywords)
             stop_requested = any(keyword in normalized_input for keyword in stop_keywords)
@@ -3142,6 +3303,20 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
                 "resultado",
                 "sintoma",
                 "prevenir",
+                # English equivalents (purely additive)
+                "medicine",
+                "medication",
+                "drug",
+                "leaflet",
+                "dosage",
+                "effect",
+                "treatment",
+                "disease",
+                "diagnosis",
+                "exam",
+                "result",
+                "symptom",
+                "prevent",
             ]
             is_direct_query = any(keyword in normalized_input for keyword in general_keywords)
 
@@ -3162,7 +3337,7 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
             elif (
                 not st.session_state.triage_mode
                 and symptom_candidates
-                and any(trigger in normalized_input for trigger in ["dor", "sinto", "tenho", "estou com", "sentindo", "sintomas"])
+                and any(trigger in normalized_input for trigger in ["dor", "sinto", "tenho", "estou com", "sentindo", "sintomas", "pain", "i feel", "i have", "i am feeling", "feeling", "symptoms", "i'm feeling", "hurts"])
             ):
                 st.session_state.triage_mode = True
                 reset_question_progress()
@@ -3184,7 +3359,9 @@ if (chat) { chat.scrollTop = chat.scrollHeight; }
                     st.rerun()
                     return
 
-            if re.search(r"\bquais?\b.*\bsintoma", normalized_input):
+            if re.search(r"\bquais?\b.*\bsintoma", normalized_input) or re.search(
+                r"\b(what|which|list|show)\b.*\bsymptom", normalized_input
+            ):
                 summary = summarize_symptom_log(st.session_state.symptom_log)
                 response_text = (
                     summary
